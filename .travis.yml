@@ -1,12 +1,21 @@
 language: go
 
+cache:
+  directories:
+  - $HOME/.cache/go-build
+  - $GOPATH/pkg/mod
+
+os:
+  - linux
+
 go:
-  - 1.13.10
+  - "1.13"
+
+services: docker
 
 before_install:
   - curl -L https://go.kubebuilder.io/dl/2.3.1/linux/amd64 | tar -xz -C /usr/local/
   - ln -s /usr/local/kubebuilder_2.3.1_linux_amd64/bin/kubebuilder /usr/local/bin/kubebuilder
 
 script:
-  - make test
-  - make manager
+  - make docker-build
