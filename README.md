@@ -31,6 +31,7 @@ Build your own image:
  * Take care on Node status, current POC checks only number of nodes
  * Dedicated or preferred node label
  * Disallow node label
+ * More sophisticated ratio calculation
 
 # Contributing
 
