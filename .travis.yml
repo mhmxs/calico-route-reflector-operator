@@ -13,11 +13,5 @@ go:
 
 services: docker
 
-env:
-  - PATH=$HOME/kubebuilder_2.3.1_linux_amd64/bin:$PATH
-
-before_install:
-  - curl -L https://go.kubebuilder.io/dl/2.3.1/linux/amd64 | tar -xz -C $HOME
-
 script:
   - make docker-build
