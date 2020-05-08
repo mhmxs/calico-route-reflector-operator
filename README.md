@@ -14,10 +14,14 @@ This Kubernetes operator can monitor and scale Calico route refloctor pods based
 During the `api/core/v1/Node` reconcile phases it calculates the right number of route refloctor pods by multiply the number of nodes with the given ratio.
 It updates the route reflector replicas to the expected number.
 
-## Build
+## Usage
 
 This is a standard Kubebuilder opertor so building and deploying process is similar as a (stock Kubebuilder project)[https://book.kubebuilder.io/cronjob-tutorial/running.html].
 
+Use official image (Don't trust me! Build your own :D):
+`make install deploy`
+
+Build your own image:
 `IMG_REPO=[IMG_REPO] IMG_NAME=[IMG_NAME] IMG_VERSION=[IMG_VERSION] make docker-push install deploy`
 
 ## Roadmap

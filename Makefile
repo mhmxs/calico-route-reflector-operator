@@ -1,5 +1,3 @@
-GIT_COMMIT_SHA:=$(shell git rev-parse HEAD 2>/dev/null)
-
 IMG_REPO ?= quay.io/mhmxs
 IMG_NAME ?= calico-route-reflector-controller
 IMG_VERSION ?= latest
@@ -15,9 +13,6 @@ GOBIN=$(shell go env GOBIN)
 endif
 
 all: manager
-
-_calculate-build-number:
-    $(eval export CONTAINER_VERSION?=$(GIT_COMMIT_SHA)-$(shell date "+%s"))
 
 # Run tests
 test: generate fmt vet manifests
@@ -71,20 +66,13 @@ generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 # Build the docker image
-docker-build: _calculate-build-number test
+docker-build: test
 	docker build -t $(IMG_NAME):$(IMG_VERSION) .
-
-dev-docker-build: _calculate-build-number test
-	docker build -t $(IMG_NAME):$(CONTAINER_VERSION) .
 
 # Push the docker image
 docker-push: docker-build
 	docker tag $(IMG_NAME):$(IMG_VERSION) $(IMG_REPO)/$(IMG_NAME):$(IMG_VERSION)
 	docker push $(IMG_REPO)/$(IMG_NAME):$(IMG_VERSION)
-
-dev-docker-push: docker-build
-	docker tag $(IMG_NAME):$(CONTAINER_VERSION) $(IMG_REPO)/$(IMG_NAME):$(CONTAINER_VERSION)
-	docker push $(IMG_REPO)/$(IMG_NAME):$(CONTAINER_VERSION)
 
 # find or download controller-gen
 # download controller-gen if necessary
