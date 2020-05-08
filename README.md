@@ -31,3 +31,9 @@ Build your own image:
  * Take care on Node status, current POC checks only number of nodes
  * Dedicated or preferred node label
  * Disallow node label
+
+# Contributing
+
+We appreciate your help!
+
+To contribute, please read our contribution guidelines: [CONTRIBUTION.md](CONTRIBUTION.md)
