@@ -1,3 +1,7 @@
 domain: calico-route-reflector-operator.mhmxs.github.com
 repo: github.com/mhmxs/calico-route-reflector-operator
+resources:
+- group: route-reflector
+  kind: RouteReflectorConfig
+  version: v1
 version: "2"

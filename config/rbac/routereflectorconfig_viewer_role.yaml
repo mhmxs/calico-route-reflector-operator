@@ -1,0 +1,20 @@
+# permissions for end users to view routereflectorconfigs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: routereflectorconfig-viewer-role
+rules:
+- apiGroups:
+  - route-reflector.calico-route-reflector-operator.mhmxs.github.com
+  resources:
+  - routereflectorconfigs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - route-reflector.calico-route-reflector-operator.mhmxs.github.com
+  resources:
+  - routereflectorconfigs/status
+  verbs:
+  - get

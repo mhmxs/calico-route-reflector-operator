@@ -1,0 +1,24 @@
+# permissions for end users to edit routereflectorconfigs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: routereflectorconfig-editor-role
+rules:
+- apiGroups:
+  - route-reflector.calico-route-reflector-operator.mhmxs.github.com
+  resources:
+  - routereflectorconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - route-reflector.calico-route-reflector-operator.mhmxs.github.com
+  resources:
+  - routereflectorconfigs/status
+  verbs:
+  - get

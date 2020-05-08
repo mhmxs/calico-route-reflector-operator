@@ -1,0 +1,7 @@
+apiVersion: route-reflector.calico-route-reflector-operator.mhmxs.github.com/v1
+kind: RouteReflectorConfig
+metadata:
+  name: routereflectorconfig-sample
+spec:
+  # Add fields here
+  foo: bar
