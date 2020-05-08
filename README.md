@@ -10,15 +10,20 @@ This Kubernetes operator can monitor and scale Calico route refloctor pods based
  * `ROUTE_REFLECTOR_MAX` Maximum number of route reflector pods, default `10`
  * `ROUTE_REFLECTOR_RATIO` Node / route reflector pod ratio, default `0.2` (`100 * 0.2 = 20`)
  * `ROUTE_REFLECTOR_NODE_LABEL` Node label of the route reflector nodes, default `calico-route-reflector=`
-// * `ROUTE_REFLECTOR_ZONE_LABEL` Node label of the zone, default `""`
-// * `ROUTE_REFLECTOR_PROTECTED` Node label of the nodes where route reflector pods are not allowed, default `""`
  
 During the `api/core/v1/Node` reconcile phases it calculates the right number of route refloctor pods by multiply the number of nodes with the given ratio.
 It updates the route reflector replicas to the expected number.
-// If the given `ROUTE_REFLECTOR_ZONE_LABEL` is not empty, the operator balancing route reflector pods between the zones.
 
 ## Build
 
 This is a standard Kubebuilder opertor so building and deploying process is similar as a (stock Kubebuilder project)[https://book.kubebuilder.io/cronjob-tutorial/running.html].
 
 `IMG_REPO=[IMG_REPO] IMG_NAME=[IMG_NAME] IMG_VERSION=[IMG_VERSION] make docker-push install deploy`
+
+## Roadmap
+
+ * Use custom resource instead of environment variables
+ * Auto balancing of route reflector pods between zones
+ * Take care on Node status, current POC checks only number of nodes
+ * Dedicated or preferred node label
+ * Disallow node label
