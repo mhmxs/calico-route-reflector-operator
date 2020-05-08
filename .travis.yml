@@ -16,11 +16,7 @@ services: docker
 before_install:
   - curl -L https://go.kubebuilder.io/dl/2.3.1/linux/amd64 | tar -xz -C $HOME
   - sudo cp -rs $HOME/kubebuilder_2.3.1_linux_amd64/bin/* /usr/local/bin
+  - ls -lsa /usr/local/bin
 
 script:
   - make docker-build
-
-addons:
-  artifacts:
-    paths:
-    - cover.out
