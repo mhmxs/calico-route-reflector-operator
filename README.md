@@ -18,7 +18,7 @@ It updates the route reflector replicas to the expected number.
 
 This is a standard Kubebuilder opertor so building and deploying process is similar as a (stock Kubebuilder project)[https://book.kubebuilder.io/cronjob-tutorial/running.html].
 
-Use official image (Don't trust me! Build your own :D):
+Use official image:
 `make install deploy`
 
 Build your own image:
