@@ -2,13 +2,13 @@
 
 # Calico Route Reflector Operator
 
-This project is work in progress !!!
+### This project is work in progress !!!
 
-Use your own risk !!!
+### Use your own risk !!!
 
-It works only on fully operational (100% healthy) single zone clusters!!!
+### It works only on fully operational (100% healthy) single zone clusters!!!
 
-Proposal documentation found here: https://github.com/mhmxs/calico-route-reflector-operator-proposal. Please feel free to share your ideas!!!
+### Proposal documentation found here: https://github.com/mhmxs/calico-route-reflector-operator-proposal. Please feel free to share your ideas!!!
 
 This Kubernetes operator can monitor and scale Calico route refloctor pods based on cluster size. The operator has a few environment variable:
  * `ROUTE_REFLECTOR_MIN` Minimum number of route reflector pods, default `3`
