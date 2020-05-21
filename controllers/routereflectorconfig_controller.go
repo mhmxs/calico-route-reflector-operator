@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"math"
-	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/prometheus/common/log"
@@ -32,19 +31,23 @@ import (
 )
 
 var (
-	nodeUnderDelete = ctrl.Result{}
-	finished        = ctrl.Result{}
+	nodeNotFound = ctrl.Result{}
+	nodeCleaned  = ctrl.Result{Requeue: true}
+	finished     = ctrl.Result{}
 
-	nodeGetError    = ctrl.Result{}
-	nodeListError   = ctrl.Result{}
-	nodeUpdateError = ctrl.Result{}
+	nodeGetError     = ctrl.Result{}
+	nodeCleanupError = ctrl.Result{}
+	nodeListError    = ctrl.Result{}
+	nodeUpdateError  = ctrl.Result{}
 )
 
 type RouteReflectorConfig struct {
-	Min       int
-	Max       int
-	Ration    float64
-	NodeLabel string
+	Min            int
+	Max            int
+	Ration         float64
+	NodeLabelKey   string
+	NodeLabelValue string
+	ZoneLabel      string
 }
 
 // RouteReflectorConfigReconciler reconciles a RouteReflectorConfig object
@@ -61,12 +64,6 @@ type reconcileImplClient interface {
 	List(context.Context, runtime.Object, ...client.ListOption) error
 }
 
-type reconcileImplParams struct {
-	request ctrl.Request
-	client  reconcileImplClient
-	config  RouteReflectorConfig
-}
-
 // +kubebuilder:rbac:groups=route-reflector.calico-route-reflector-operator.mhmxs.github.com,resources=routereflectorconfigs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=route-reflector.calico-route-reflector-operator.mhmxs.github.com,resources=routereflectorconfigs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;update;watch
@@ -74,82 +71,119 @@ type reconcileImplParams struct {
 func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("routereflectorconfig", req.NamespacedName)
 
-	return reconcileImpl(&reconcileImplParams{
-		request: req,
-		client:  r.Client,
-		config:  r.config,
-	})
-}
-
-func reconcileImpl(params *reconcileImplParams) (ctrl.Result, error) {
-	node := &corev1.Node{}
-	err := params.client.Get(context.Background(), params.request.NamespacedName, node)
-
+	node := corev1.Node{}
+	err := r.Client.Get(context.Background(), req.NamespacedName, &node)
 	if err != nil && !errors.IsNotFound(err) {
-		log.Errorf("Unable to fetch node %s reason %s", params.request.NamespacedName, err.Error())
+		log.Errorf("Unable to fetch node %s reason %s", req.NamespacedName, err.Error())
 		return nodeGetError, err
-	} else if err == nil && node.GetDeletionTimestamp() != nil {
-		return nodeUnderDelete, nil
+	} else if errors.IsNotFound(err) {
+		log.Debugf("Node not found %s", req.NamespacedName)
+		return nodeNotFound, nil
+	} else if err == nil && node.GetDeletionTimestamp() != nil || !isNodeReady(&node) {
+		// Node is deleted right now or has some issues, better to remove form RRs
+		if err := r.cleanupLabel(req, &node, r.config.NodeLabelKey); err != nil {
+			log.Errorf("Unable to cleanup label on %s because of %s", req.NamespacedName, err.Error())
+			return nodeCleanupError, err
+		}
+
+		return nodeCleaned, nil
 	}
 
-	nodes := &corev1.NodeList{}
-	if err := params.client.List(context.Background(), nodes, &client.ListOptions{}); err != nil {
+	listOptions := client.ListOptions{}
+	if r.config.ZoneLabel != "" {
+		if nodeZone, ok := node.GetLabels()[r.config.ZoneLabel]; ok {
+			labels := client.MatchingLabels{r.config.ZoneLabel: nodeZone}
+			labels.ApplyToList(&listOptions)
+		}
+	}
+	log.Debugf("List options are %v", listOptions)
+	nodeList := corev1.NodeList{}
+	if err := r.Client.List(context.Background(), &nodeList, &listOptions); err != nil {
 		log.Errorf("Unable to list nodes ,reason %s", err.Error())
 		return nodeListError, err
 	}
 
-	expectedNumber := int(math.Round(float64(len(nodes.Items)) * params.config.Ration))
-	if expectedNumber < params.config.Min {
-		expectedNumber = params.config.Min
-	} else if expectedNumber > params.config.Max {
-		expectedNumber = params.config.Max
-	}
-	log.Infof("Expected number of route reflector pods are %d", expectedNumber)
-
-	key, value := getKeyValue(params.config.NodeLabel)
-	actualNumber := 0
-	for _, n := range nodes.Items {
-		if isLabeled(n.GetLabels(), key, value) {
-			actualNumber++
+	readyNodes := 0
+	actualReadyNumber := 0
+	nodes := map[*corev1.Node]bool{}
+	for _, n := range nodeList.Items {
+		nodes[&n] = isNodeReady(&n)
+		if nodes[&n] {
+			readyNodes++
+			if isLabeled(n.GetLabels(), r.config.NodeLabelKey, r.config.NodeLabelValue) {
+				actualReadyNumber++
+			}
 		}
 	}
-	log.Infof("Actual number of route reflector pods are %d", actualNumber)
+	log.Infof("Nodes are ready %d", readyNodes)
+	log.Infof("Actual number of healthy route reflector nodes are %d", actualReadyNumber)
 
-	if expectedNumber != actualNumber {
-		for _, n := range nodes.Items {
-			if expectedNumber == actualNumber {
-				break
-			}
-			labeled := isLabeled(n.GetLabels(), key, value)
-			if expectedNumber > actualNumber && !labeled {
-				log.Infof("Label node %s as route reflector", n.GetName())
-				n.Labels[key] = value
-				actualNumber++
-			} else if expectedNumber < actualNumber && labeled {
-				log.Infof("Remove node %s role route reflector", n.GetName())
-				delete(n.Labels, key)
-				actualNumber--
-			} else {
-				continue
+	expectedNumber := int(math.Round(float64(readyNodes) * r.config.Ration))
+	if expectedNumber < r.config.Min {
+		expectedNumber = r.config.Min
+	} else if expectedNumber > r.config.Max {
+		expectedNumber = r.config.Max
+	}
+	log.Infof("Expected number of route reflector nodes are %d", expectedNumber)
+
+	for n, isReady := range nodes {
+		if !isReady {
+			// Node has some issues, better to remove form RRs
+			if err := r.cleanupLabel(req, n, r.config.NodeLabelKey); err != nil {
+				log.Errorf("Unable to cleanup label on %s because of %s", req.NamespacedName, err.Error())
+				return nodeCleanupError, err
 			}
 
-			if err = params.client.Update(context.Background(), &n); err != nil {
-				log.Errorf("Unable to update node %s, reason %s", params.request.NamespacedName, err.Error())
-				return nodeUpdateError, err
-			}
+			continue
+		} else if expectedNumber == actualReadyNumber {
+			continue
+		}
+
+		labeled := isLabeled(n.GetLabels(), r.config.NodeLabelKey, r.config.NodeLabelValue)
+		if !labeled && expectedNumber > actualReadyNumber {
+			log.Infof("Label node %s as route reflector", n.GetName())
+			n.Labels[r.config.NodeLabelKey] = r.config.NodeLabelValue
+			actualReadyNumber++
+		} else if labeled && expectedNumber < actualReadyNumber {
+			log.Infof("Remove node %s role route reflector", n.GetName())
+			delete(n.Labels, r.config.NodeLabelKey)
+			actualReadyNumber--
+		} else {
+			continue
+		}
+
+		log.Infof("Updating labels on node %s to %v", req.NamespacedName, n.Labels)
+		if err = r.Client.Update(context.Background(), n); err != nil {
+			log.Errorf("Unable to update node %s, reason %s", req.NamespacedName, err.Error())
+			return nodeUpdateError, err
 		}
 	}
 
 	return finished, nil
 }
 
-func getKeyValue(label string) (string, string) {
-	keyValue := strings.Split(label, "=")
-	if len(keyValue) == 1 {
-		keyValue[1] = ""
+func (r *RouteReflectorConfigReconciler) cleanupLabel(req ctrl.Request, node *corev1.Node, labelKey string) error {
+	if _, ok := node.GetLabels()[labelKey]; ok {
+		delete(node.Labels, labelKey)
+
+		log.Infof("Removing route reflector label from %s", req.NamespacedName)
+		if err := r.Client.Update(context.Background(), node); err != nil {
+			log.Errorf("Unable to cleanup node %s, reason %s", req.NamespacedName, err.Error())
+			return err
+		}
 	}
 
-	return keyValue[0], keyValue[1]
+	return nil
+}
+
+func isNodeReady(node *corev1.Node) bool {
+	for _, c := range node.Status.Conditions {
+		if c.Type == corev1.NodeReady {
+			return true
+		}
+	}
+
+	return false
 }
 
 func isLabeled(labels map[string]string, key, value string) bool {
@@ -160,7 +194,7 @@ func isLabeled(labels map[string]string, key, value string) bool {
 type eventFilter struct{}
 
 func (ef eventFilter) Create(event.CreateEvent) bool {
-	return true
+	return false
 }
 
 func (ef eventFilter) Delete(e event.DeleteEvent) bool {
@@ -168,11 +202,11 @@ func (ef eventFilter) Delete(e event.DeleteEvent) bool {
 }
 
 func (ef eventFilter) Update(event.UpdateEvent) bool {
-	return false
+	return true
 }
 
 func (ef eventFilter) Generic(event.GenericEvent) bool {
-	return false
+	return true
 }
 
 func (r *RouteReflectorConfigReconciler) SetupWithManager(mgr ctrl.Manager, config RouteReflectorConfig) error {

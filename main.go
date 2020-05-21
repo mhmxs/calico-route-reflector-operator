@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -36,11 +37,10 @@ import (
 )
 
 const (
-	routeReflectorMin      = 3
-	routeReflectorMax      = 10
-	routeReflectorRatio    = 0.2
-	routeReflectorMaxRatio = 0.5
-	routeReflectorLabel    = "calico-route-reflector="
+	routeReflectorMin   = 3
+	routeReflectorMax   = 10
+	routeReflectorRatio = 0.005
+	routeReflectorLabel = "calico-route-reflector"
 )
 
 var (
@@ -85,17 +85,19 @@ func main() {
 		panic(err)
 	}
 
-	min, max, ratio, nodeLabel := parseEnv()
+	min, max, ratio, nodeLabelKey, nodeLabelValue, zoneLabel := parseEnv()
 
 	if err = (&controllers.RouteReflectorConfigReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("RouteReflectorConfig"),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr, controllers.RouteReflectorConfig{
-		Min:       min,
-		Max:       max,
-		Ration:    ratio,
-		NodeLabel: nodeLabel,
+		Min:            min,
+		Max:            max,
+		Ration:         ratio,
+		NodeLabelKey:   nodeLabelKey,
+		NodeLabelValue: nodeLabelValue,
+		ZoneLabel:      zoneLabel,
 	}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RouteReflectorConfig")
 		panic(err)
@@ -109,7 +111,7 @@ func main() {
 	}
 }
 
-func parseEnv() (int, int, float64, string) {
+func parseEnv() (int, int, float64, string, string, string) {
 	var err error
 	min := routeReflectorMin
 	if v, ok := os.LookupEnv("ROUTE_REFLECTOR_MIN"); ok {
@@ -117,8 +119,8 @@ func parseEnv() (int, int, float64, string) {
 		if err != nil {
 			setupLog.Error(err, "ROUTE_REFLECTOR_MIN is not an integer")
 			panic(err)
-		} else if min < 3 || min > 999 {
-			err = errors.New("ROUTE_REFLECTOR_MIN must be positive number between 3 and 999")
+		} else if min < 3 || min > 50 {
+			err = errors.New("ROUTE_REFLECTOR_MIN must be positive number between 3 and 50")
 			setupLog.Error(err, err.Error())
 			panic(err)
 		}
@@ -129,8 +131,8 @@ func parseEnv() (int, int, float64, string) {
 		if err != nil {
 			setupLog.Error(err, "ROUTE_REFLECTOR_MAX is not an integer")
 			panic(err)
-		} else if max < 5 || max > 2500 {
-			err = errors.New("ROUTE_REFLECTOR_MIN must be positive number between 5 and 2500")
+		} else if max < 5 || max > 50 {
+			err = errors.New("ROUTE_REFLECTOR_MIN must be positive number between 5 and 50")
 			setupLog.Error(err, err.Error())
 			panic(err)
 		}
@@ -139,18 +141,30 @@ func parseEnv() (int, int, float64, string) {
 	if v, ok := os.LookupEnv("ROUTE_REFLECTOR_RATIO"); ok {
 		ratio, err = strconv.ParseFloat(v, 32)
 		if err != nil {
-			setupLog.Error(err, "ROUTE_REFLECTOR_RATIO is not a float")
+			setupLog.Error(err, "ROUTE_REFLECTOR_RATIO is not a valid number")
 			panic(err)
-		} else if ratio > routeReflectorMaxRatio {
-			err = fmt.Errorf("ROUTE_REFLECTOR_RATIO is bigger than %f", routeReflectorMaxRatio)
+		} else if ratio < 0.001 || ratio > 0.05 {
+			err = errors.New("ROUTE_REFLECTOR_MIN must be a number between 0.001 and 0.05")
 			setupLog.Error(err, err.Error())
 			panic(err)
 		}
 	}
-	nodeLabel := routeReflectorLabel
+	nodeLabelKey := routeReflectorLabel
+	nodeLabelValue := ""
 	if v, ok := os.LookupEnv("ROUTE_REFLECTOR_NODE_LABEL"); ok {
-		nodeLabel = v
+		nodeLabelKey, nodeLabelValue = getKeyValue(v)
 	}
 
-	return min, max, ratio, nodeLabel
+	zoneLable := os.Getenv("ROUTE_REFLECTOR_ZONE_LABEL")
+
+	return min, max, ratio, nodeLabelKey, nodeLabelValue, zoneLable
+}
+
+func getKeyValue(label string) (string, string) {
+	keyValue := strings.Split(label, "=")
+	if len(keyValue) == 1 {
+		keyValue[1] = ""
+	}
+
+	return keyValue[0], keyValue[1]
 }

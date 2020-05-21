@@ -11,10 +11,11 @@
 ### Proposal documentation found here: https://github.com/mhmxs/calico-route-reflector-operator-proposal. Please feel free to share your ideas!!!
 
 This Kubernetes operator can monitor and scale Calico route refloctor pods based on cluster size. The operator has a few environment variable:
- * `ROUTE_REFLECTOR_MIN` Minimum number of route reflector pods, default `3`
- * `ROUTE_REFLECTOR_MAX` Maximum number of route reflector pods, default `10`
- * `ROUTE_REFLECTOR_RATIO` Node / route reflector pod ratio, default `0.2` (`100 * 0.2 = 20`)
+ * `ROUTE_REFLECTOR_MIN` Minimum number of route reflector pods per zone, default `3`
+ * `ROUTE_REFLECTOR_MAX` Maximum number of route reflector pods per zone, default `25`
+ * `ROUTE_REFLECTOR_RATIO` Node / route reflector pod ratio, default `0.005` (`1000 * 0.005 = 5`)
  * `ROUTE_REFLECTOR_NODE_LABEL` Node label of the route reflector nodes, default `calico-route-reflector=`
+ * `ROUTE_REFLECTOR_ZONE_LABEL` Node label of the zone, default ``
  
 During the `api/core/v1/Node` reconcile phases it calculates the right number of route refloctor pods by multiply the number of nodes with the given ratio.
 It updates the route reflector replicas to the expected number.
@@ -32,11 +33,9 @@ Build your own image:
 ## Roadmap
 
  * Use custom resource instead of environment variables
- * Auto balancing of route reflector pods between zones
- * Take care on Node status, current POC checks only number of nodes
  * Dedicated or preferred node label
  * Disallow node label
- * More sophisticated ratio calculation
+ * Handle taints and tolerations
 
 # Contributing
 
