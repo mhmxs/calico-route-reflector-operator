@@ -30,6 +30,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+
+	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 )
 
 var (
@@ -45,6 +47,7 @@ var (
 )
 
 type RouteReflectorConfig struct {
+	ClusterID      string
 	Min            int
 	Max            int
 	Ration         float64
@@ -84,7 +87,7 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		return nodeNotFound, nil
 	} else if err == nil && node.GetDeletionTimestamp() != nil || !isNodeReady(&node) {
 		// Node is deleted right now or has some issues, better to remove form RRs
-		if updated, err := r.cleanupLabel(req, &node); err != nil {
+		if updated, err := r.cleanupBGPStatus(req, &node); err != nil {
 			log.Errorf("Unable to cleanup label on %s because of %s", req.NamespacedName, err.Error())
 			return nodeCleanupError, err
 		} else if updated {
@@ -125,19 +128,13 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 
 	for n, isReady := range nodes {
 		if !isReady {
-			// Node has some issues, better to remove form RRs
-			if _, err := r.cleanupLabel(req, n); err != nil {
-				log.Errorf("Unable to cleanup label on %s because of %s", req.NamespacedName, err.Error())
-				return nodeCleanupError, err
-			}
-
 			continue
 		} else if expectedNumber == actualReadyNumber {
-			continue
+			break
 		}
 
 		if diff := expectedNumber - actualReadyNumber; diff != 0 {
-			if updated, err := r.updateLabel(req, n, diff); err != nil {
+			if updated, err := r.updateBGPStatus(req, n, diff); err != nil {
 				log.Errorf("Unable to update node %s because of %s", req.NamespacedName, err.Error())
 				return nodeUpdateError, err
 			} else if updated && diff > 0 {
@@ -177,12 +174,19 @@ func (r *RouteReflectorConfigReconciler) collectNodeInfo(allNodes []corev1.Node)
 	return
 }
 
-func (r *RouteReflectorConfigReconciler) cleanupLabel(req ctrl.Request, node *corev1.Node) (bool, error) {
-	if _, ok := node.GetLabels()[r.config.NodeLabelKey]; ok {
-		delete(node.Labels, r.config.NodeLabelKey)
+func (r *RouteReflectorConfigReconciler) cleanupBGPStatus(req ctrl.Request, node *corev1.Node) (bool, error) {
+	if isLabeled(node.GetLabels(), r.config.NodeLabelKey, r.config.NodeLabelValue) {
+		calicoNode, err := r.fetchCalicoNode(req, node)
+		if err != nil {
+			log.Errorf("Failed to fetch Calico node %s because of %s", req.NamespacedName, err.Error())
+			return false, err
+		}
+
+		delete(calicoNode.Labels, r.config.NodeLabelKey)
+		calicoNode.Spec.BGP.RouteReflectorClusterID = ""
 
 		log.Infof("Removing route reflector label from %s", req.NamespacedName)
-		if err := r.Client.Update(context.Background(), node); err != nil {
+		if err := r.Client.Update(context.Background(), calicoNode); err != nil {
 			log.Errorf("Unable to cleanup node %s because of %s", req.NamespacedName, err.Error())
 			return false, err
 		}
@@ -193,24 +197,40 @@ func (r *RouteReflectorConfigReconciler) cleanupLabel(req ctrl.Request, node *co
 	return false, nil
 }
 
-func (r *RouteReflectorConfigReconciler) updateLabel(req ctrl.Request, node *corev1.Node, diff int) (bool, error) {
+func (r *RouteReflectorConfigReconciler) updateBGPStatus(req ctrl.Request, node *corev1.Node, diff int) (bool, error) {
 	labeled := isLabeled(node.GetLabels(), r.config.NodeLabelKey, r.config.NodeLabelValue)
-	if !labeled && diff > 0 {
-		log.Infof("Label node %s as route reflector", node.GetName())
-		node.Labels[r.config.NodeLabelKey] = r.config.NodeLabelValue
-	} else if labeled && diff < 0 {
-		log.Infof("Remove node %s role route reflector", node.GetName())
-		delete(node.Labels, r.config.NodeLabelKey)
-	} else {
+	if labeled && diff < 0 {
+		return r.cleanupBGPStatus(req, node)
+	} else if labeled || diff <= 0 {
 		return false, nil
 	}
 
+	calicoNode, err := r.fetchCalicoNode(req, node)
+	if err != nil {
+		return false, err
+	}
+
+	log.Infof("Label node %s as route reflector", node.GetName())
+	calicoNode.Labels[r.config.NodeLabelKey] = r.config.NodeLabelValue
+	calicoNode.Spec.BGP.RouteReflectorClusterID = r.config.ClusterID
+
 	log.Infof("Updating labels on node %s to %v", req.NamespacedName, node.Labels)
-	if err := r.Client.Update(context.Background(), node); err != nil {
+	if err := r.Client.Update(context.Background(), calicoNode); err != nil {
+		log.Errorf("Failed to fetch Calico node %s because of %s", req.NamespacedName, err.Error())
 		return false, err
 	}
 
 	return true, nil
+}
+
+func (r *RouteReflectorConfigReconciler) fetchCalicoNode(req ctrl.Request, node *corev1.Node) (*calicoApi.Node, error) {
+	log.Debugf("Fetching Calico node object of %s", req.NamespacedName)
+	calicoNode := calicoApi.Node{}
+	if err := r.Client.Get(context.Background(), req.NamespacedName, &calicoNode); err != nil {
+		return nil, err
+	}
+
+	return &calicoNode, nil
 }
 
 func isNodeReady(node *corev1.Node) bool {

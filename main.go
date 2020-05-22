@@ -37,17 +37,17 @@ import (
 )
 
 const (
-	routeReflectorMin      = 3
-	routeReflectorMax      = 10
-	routeReflectorRatio    = 0.005
-	routeReflectorRatioMin = 0.001
-
-	routeReflectorRatioMax = 0.05
-	routeReflectorLabel    = "calico-route-reflector"
+	defaultClusterID              = "224.0.0.1"
+	defaultRouteReflectorMin      = 3
+	defaultRouteReflectorMax      = 10
+	defaultRouteReflectorRatio    = 0.005
+	defaultRouteReflectorRatioMin = 0.001
+	defaultRouteReflectorRatioMax = 0.05
+	defaultRouteReflectorLabel    = "calico-route-reflector"
 
 	shift                         = 100000
-	routeReflectorRatioMinShifted = int(routeReflectorRatioMin * shift)
-	routeReflectorRatioMaxShifted = int(routeReflectorRatioMax * shift)
+	routeReflectorRatioMinShifted = int(defaultRouteReflectorRatioMin * shift)
+	routeReflectorRatioMaxShifted = int(defaultRouteReflectorRatioMax * shift)
 )
 
 var (
@@ -92,13 +92,14 @@ func main() {
 		panic(err)
 	}
 
-	min, max, ratio, nodeLabelKey, nodeLabelValue, zoneLabel := parseEnv()
+	min, max, clusterID, ratio, nodeLabelKey, nodeLabelValue, zoneLabel := parseEnv()
 
 	if err = (&controllers.RouteReflectorConfigReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("RouteReflectorConfig"),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr, controllers.RouteReflectorConfig{
+		ClusterID:      clusterID,
 		Min:            min,
 		Max:            max,
 		Ration:         ratio,
@@ -118,9 +119,13 @@ func main() {
 	}
 }
 
-func parseEnv() (int, int, float64, string, string, string) {
+func parseEnv() (int, int, string, float64, string, string, string) {
 	var err error
-	min := routeReflectorMin
+	clusterID := defaultClusterID
+	if v, ok := os.LookupEnv("ROUTE_REFLECTOR_CLUSTER_ID"); ok {
+		clusterID = v
+	}
+	min := defaultRouteReflectorMin
 	if v, ok := os.LookupEnv("ROUTE_REFLECTOR_MIN"); ok {
 		min, err = strconv.Atoi(v)
 		if err != nil {
@@ -132,7 +137,7 @@ func parseEnv() (int, int, float64, string, string, string) {
 			panic(err)
 		}
 	}
-	max := routeReflectorMax
+	max := defaultRouteReflectorMax
 	if v, ok := os.LookupEnv("ROUTE_REFLECTOR_MAX"); ok {
 		max, err = strconv.Atoi(v)
 		if err != nil {
@@ -144,7 +149,7 @@ func parseEnv() (int, int, float64, string, string, string) {
 			panic(err)
 		}
 	}
-	ratio := routeReflectorRatio
+	ratio := defaultRouteReflectorRatio
 	if v, ok := os.LookupEnv("ROUTE_REFLECTOR_RATIO"); ok {
 		ratio, err = strconv.ParseFloat(v, 32)
 		if err != nil {
@@ -157,7 +162,7 @@ func parseEnv() (int, int, float64, string, string, string) {
 		}
 	}
 
-	nodeLabelKey := routeReflectorLabel
+	nodeLabelKey := defaultRouteReflectorLabel
 	nodeLabelValue := ""
 	if v, ok := os.LookupEnv("ROUTE_REFLECTOR_NODE_LABEL"); ok {
 		nodeLabelKey, nodeLabelValue = getKeyValue(v)
@@ -165,7 +170,7 @@ func parseEnv() (int, int, float64, string, string, string) {
 
 	zoneLable := os.Getenv("ROUTE_REFLECTOR_ZONE_LABEL")
 
-	return min, max, ratio, nodeLabelKey, nodeLabelValue, zoneLable
+	return min, max, clusterID, ratio, nodeLabelKey, nodeLabelValue, zoneLable
 }
 
 func getKeyValue(label string) (string, string) {
