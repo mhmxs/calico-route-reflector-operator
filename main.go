@@ -37,10 +37,17 @@ import (
 )
 
 const (
-	routeReflectorMin   = 3
-	routeReflectorMax   = 10
-	routeReflectorRatio = 0.005
-	routeReflectorLabel = "calico-route-reflector"
+	routeReflectorMin      = 3
+	routeReflectorMax      = 10
+	routeReflectorRatio    = 0.005
+	routeReflectorRatioMin = 0.001
+
+	routeReflectorRatioMax = 0.05
+	routeReflectorLabel    = "calico-route-reflector"
+
+	shift                         = 100000
+	routeReflectorRatioMinShifted = int(routeReflectorRatioMin * shift)
+	routeReflectorRatioMaxShifted = int(routeReflectorRatioMax * shift)
 )
 
 var (
@@ -119,8 +126,8 @@ func parseEnv() (int, int, float64, string, string, string) {
 		if err != nil {
 			setupLog.Error(err, "ROUTE_REFLECTOR_MIN is not an integer")
 			panic(err)
-		} else if min < 3 || min > 50 {
-			err = errors.New("ROUTE_REFLECTOR_MIN must be positive number between 3 and 50")
+		} else if min < 1 || min > 50 {
+			err = errors.New("ROUTE_REFLECTOR_MIN must be positive number between 1 and 50, current: " + fmt.Sprintf("%d", min))
 			setupLog.Error(err, err.Error())
 			panic(err)
 		}
@@ -132,7 +139,7 @@ func parseEnv() (int, int, float64, string, string, string) {
 			setupLog.Error(err, "ROUTE_REFLECTOR_MAX is not an integer")
 			panic(err)
 		} else if max < 5 || max > 50 {
-			err = errors.New("ROUTE_REFLECTOR_MIN must be positive number between 5 and 50")
+			err = errors.New("ROUTE_REFLECTOR_MIN must be positive number between 5 and 50, current: " + fmt.Sprintf("%d", max))
 			setupLog.Error(err, err.Error())
 			panic(err)
 		}
@@ -143,12 +150,13 @@ func parseEnv() (int, int, float64, string, string, string) {
 		if err != nil {
 			setupLog.Error(err, "ROUTE_REFLECTOR_RATIO is not a valid number")
 			panic(err)
-		} else if ratio < 0.001 || ratio > 0.05 {
-			err = errors.New("ROUTE_REFLECTOR_MIN must be a number between 0.001 and 0.05")
+		} else if ratioShifted := int(ratio * shift); ratioShifted < routeReflectorRatioMinShifted || ratioShifted > routeReflectorRatioMaxShifted {
+			err = errors.New("ROUTE_REFLECTOR_MIN must be a number between 0.001 and 0.05, current: " + fmt.Sprintf("%f", ratio))
 			setupLog.Error(err, err.Error())
 			panic(err)
 		}
 	}
+
 	nodeLabelKey := routeReflectorLabel
 	nodeLabelValue := ""
 	if v, ok := os.LookupEnv("ROUTE_REFLECTOR_NODE_LABEL"); ok {
