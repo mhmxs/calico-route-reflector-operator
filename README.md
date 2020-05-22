@@ -17,8 +17,7 @@ This Kubernetes operator can monitor and scale Calico route refloctor pods based
  * `ROUTE_REFLECTOR_NODE_LABEL` Node label of the route reflector nodes, default `calico-route-reflector=`
  * `ROUTE_REFLECTOR_ZONE_LABEL` Node label of the zone, default ``
  
-During the `api/core/v1/Node` reconcile phases it calculates the right number of route refloctor pods by multiply the number of nodes with the given ratio.
-It updates the route reflector replicas to the expected number.
+During the `api/core/v1/Node` reconcile phases it calculates the right number of route refloctor nodes per zone. It by multiply the number of nodes with the given ratio and updates the route reflector replicas to the expected number.
 
 ## Usage
 
@@ -28,7 +27,7 @@ Use official image:
 `make install deploy`
 
 Build your own image:
-`IMG_REPO=[IMG_REPO] IMG_NAME=[IMG_NAME] IMG_VERSION=[IMG_VERSION] make docker-push install deploy`
+`IMG_REPO=[IMG_REPO] IMG_NAME=[IMG_NAME] IMG_VERSION=[IMG_VERSION] make test docker-push install deploy`
 
 ## Roadmap
 

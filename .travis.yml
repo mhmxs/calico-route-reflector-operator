@@ -18,4 +18,4 @@ before_install:
   - sudo cp -rs $HOME/kubebuilder_2.3.1_linux_amd64 /usr/local/kubebuilder
 
 script:
-  - make docker-build
+  - make test docker-build
