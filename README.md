@@ -14,15 +14,16 @@ This Kubernetes operator can monitor and scale Calico route refloctor pods based
  * `ROUTE_REFLECTOR_RATIO` Node / route reflector pod ratio, default `0.005` (`1000 * 0.005 = 5`)
  * `ROUTE_REFLECTOR_NODE_LABEL` Node label of the route reflector nodes, default `calico-route-reflector=`
  * `ROUTE_REFLECTOR_ZONE_LABEL` Node label of the zone, default ``
- 
-During the `api/core/v1/Node` reconcile phases it calculates the right number of route refloctor nodes per zone. It by multiply the number of nodes with the given ratio and updates the route reflector replicas to the expected number.
+
+During the `api/core/v1/Node` reconcile phases it calculates the right number of route refloctor nodes per zone. It supports linear scaling only and it multiplies the number of nodes with the given ratio and than updates the route reflector replicas to the expected number.
 
 ## Usage
 
 This is a standard Kubebuilder opertor so building and deploying process is similar as a (stock Kubebuilder project)[https://book.kubebuilder.io/cronjob-tutorial/running.html].
 
 Use official image:
-`make install deploy`
+`kustomize build config/crd | kubectl apply -f -`
+`kustomize build config/default | kubectl apply -f -`
 
 Build your own image:
 `IMG_REPO=[IMG_REPO] IMG_NAME=[IMG_NAME] IMG_VERSION=[IMG_VERSION] make test docker-push install deploy`
