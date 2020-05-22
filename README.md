@@ -6,8 +6,6 @@
 
 ### Use your own risk !!!
 
-### It works only on fully operational (100% healthy) single zone clusters!!!
-
 ### Proposal documentation found here: https://github.com/mhmxs/calico-route-reflector-operator-proposal. Please feel free to share your ideas!!!
 
 This Kubernetes operator can monitor and scale Calico route refloctor pods based on cluster size. The operator has a few environment variable:
