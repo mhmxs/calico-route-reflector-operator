@@ -23,8 +23,10 @@ During the `api/core/v1/Node` reconcile phases it calculates the right number of
 This is a standard Kubebuilder opertor so building and deploying process is similar as a (stock Kubebuilder project)[https://book.kubebuilder.io/cronjob-tutorial/running.html].
 
 Use official image:
-`kustomize build config/crd | kubectl apply -f -`
-`kustomize build config/default | kubectl apply -f -`
+```
+kustomize build config/crd | kubectl apply -f -
+kustomize build config/default | kubectl apply -f -
+```
 
 Build your own image:
 `IMG_REPO=[IMG_REPO] IMG_NAME=[IMG_NAME] IMG_VERSION=[IMG_VERSION] make test docker-push install deploy`
