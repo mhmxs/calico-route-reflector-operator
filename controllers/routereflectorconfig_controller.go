@@ -85,7 +85,7 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 	} else if errors.IsNotFound(err) {
 		log.Debugf("Node not found %s", req.NamespacedName)
 		return nodeNotFound, nil
-	} else if err == nil && node.GetDeletionTimestamp() != nil || !isNodeReady(&node) {
+	} else if err == nil && node.GetDeletionTimestamp() != nil || !isNodeReady(&node) || !isNodeSchedulable(&node) {
 		// Node is deleted right now or has some issues, better to remove form RRs
 		if updated, err := r.cleanupBGPStatus(req, &node); err != nil {
 			log.Errorf("Unable to cleanup label on %s because of %s", req.NamespacedName, err.Error())
@@ -162,8 +162,9 @@ func (r *RouteReflectorConfigReconciler) collectNodeInfo(allNodes []corev1.Node)
 
 	for _, n := range allNodes {
 		isReady := isNodeReady(&n)
-		filtered[&n] = isReady
-		if isReady {
+		isSchedulable := isNodeSchedulable(&n)
+		filtered[&n] = isReady && isSchedulable
+		if isReady && isSchedulable {
 			readyNodes++
 			if isLabeled(n.GetLabels(), r.config.NodeLabelKey, r.config.NodeLabelValue) {
 				actualReadyNumber++
@@ -241,6 +242,13 @@ func isNodeReady(node *corev1.Node) bool {
 	}
 
 	return false
+}
+
+func isNodeSchedulable(node *corev1.Node) bool {
+	if node.Spec.Unschedulable == true {
+		return false
+	}
+	return true
 }
 
 func isLabeled(labels map[string]string, key, value string) bool {
