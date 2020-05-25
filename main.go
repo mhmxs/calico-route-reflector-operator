@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"strings"
 
+	calicoClient "github.com/projectcalico/libcalico-go/lib/clientv3"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -94,10 +96,16 @@ func main() {
 
 	min, max, clusterID, ratio, nodeLabelKey, nodeLabelValue, zoneLabel := parseEnv()
 
+	cc, err := calicoClient.NewFromEnv()
+	if err != nil {
+		setupLog.Error(err, "unable create Calico config from env")
+		panic(err)
+	}
 	if err = (&controllers.RouteReflectorConfigReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("RouteReflectorConfig"),
-		Scheme: mgr.GetScheme(),
+		Client:       mgr.GetClient(),
+		CalicoClient: cc,
+		Log:          ctrl.Log.WithName("controllers").WithName("RouteReflectorConfig"),
+		Scheme:       mgr.GetScheme(),
 	}).SetupWithManager(mgr, controllers.RouteReflectorConfig{
 		ClusterID:      clusterID,
 		Min:            min,

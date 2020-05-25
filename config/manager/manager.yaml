@@ -27,6 +27,11 @@ spec:
         - /manager
         args:
         - --enable-leader-election
+        env:
+          - name: DATASTORE_TYPE
+            value: "kubernetes"
+          - name: KUBECONFIG
+            value: /root/.kube/config
         image: controller:latest
         imagePullPolicy: Always
         name: manager
