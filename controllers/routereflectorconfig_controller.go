@@ -33,9 +33,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
+	calicoApiConfig "github.com/projectcalico/libcalico-go/lib/apiconfig"
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	calicoClient "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
+)
+
+const (
+	routeReflectorClusterIDAnnotation = "projectcalico.org/RouteReflectorClusterID"
 )
 
 var (
@@ -57,6 +62,7 @@ var (
 var routeReflectorsUnderOperation = map[types.UID]bool{}
 
 type RouteReflectorConfig struct {
+	DataStoreType  calicoApiConfig.DatastoreType
 	ClusterID      string
 	Min            int
 	Max            int
@@ -108,22 +114,7 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		return nodeCleaned, nil
 	}
 
-	listOptions := client.ListOptions{}
-	if r.config.ZoneLabel != "" {
-		if nodeZone, ok := node.GetLabels()[r.config.ZoneLabel]; ok {
-			labels := client.MatchingLabels{r.config.ZoneLabel: nodeZone}
-			labels.ApplyToList(&listOptions)
-		} else {
-			sel := labels.NewSelector()
-			r, err := labels.NewRequirement(r.config.ZoneLabel, selection.DoesNotExist, nil)
-			if err != nil {
-				log.Fatalf("Unable to create anti label selector because of %s", err.Error())
-				return labelSelectorError, nil
-			}
-			sel = sel.Add(*r)
-			listOptions.LabelSelector = sel
-		}
-	}
+	listOptions := r.newNodeListOptions(&node)
 	log.Debugf("List options are %v", listOptions)
 	nodeList := corev1.NodeList{}
 	if err := r.Client.List(context.Background(), &nodeList, &listOptions); err != nil {
@@ -141,21 +132,7 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 	for n := range nodes {
 		if status, ok := routeReflectorsUnderOperation[n.GetUID()]; ok {
 			// Node was under operation, better to revert it
-			if status {
-				delete(n.Labels, r.config.NodeLabelKey)
-			} else {
-				n.Labels[r.config.NodeLabelKey] = r.config.NodeLabelValue
-			}
-
-			log.Infof("Revert route reflector label on %s to %t", n.GetName(), !status)
-			if err := r.Client.Update(context.Background(), n); err != nil && !errors.IsNotFound(err) {
-				log.Errorf("Failed to revert node %s because of %s", n.GetName(), err.Error())
-				return nodeRevertError, err
-			}
-
-			delete(routeReflectorsUnderOperation, n.GetUID())
-
-			return nodeReverted, nil
+			return r.revertKubernetesNode(status, n)
 		}
 	}
 
@@ -208,6 +185,9 @@ func (r *RouteReflectorConfigReconciler) collectNodeInfo(allNodes []corev1.Node)
 
 func (r *RouteReflectorConfigReconciler) cleanupBGPStatus(req ctrl.Request, node *corev1.Node) error {
 	delete(node.Labels, r.config.NodeLabelKey)
+	if r.config.DataStoreType == calicoApiConfig.Kubernetes {
+		delete(node.Annotations, routeReflectorClusterIDAnnotation)
+	}
 
 	log.Infof("Removing route reflector label from %s", node.GetName())
 	if err := r.Client.Update(context.Background(), node); err != nil {
@@ -215,9 +195,11 @@ func (r *RouteReflectorConfigReconciler) cleanupBGPStatus(req ctrl.Request, node
 		return err
 	}
 
-	if err := r.updateRouteReflectorClusterID(req, node, ""); err != nil {
-		log.Errorf("Unable to cleanup Calico node %s because of %s", node.GetName(), err.Error())
-		return err
+	if r.config.DataStoreType == calicoApiConfig.EtcdV3 {
+		if err := r.updateRouteReflectorClusterID(req, node, ""); err != nil {
+			log.Errorf("Unable to cleanup Calico node %s because of %s", node.GetName(), err.Error())
+			return err
+		}
 	}
 
 	return nil
@@ -231,6 +213,9 @@ func (r *RouteReflectorConfigReconciler) updateBGPStatus(req ctrl.Request, node 
 	}
 
 	node.Labels[r.config.NodeLabelKey] = r.config.NodeLabelValue
+	if r.config.DataStoreType == calicoApiConfig.Kubernetes {
+		node.Annotations[routeReflectorClusterIDAnnotation] = r.config.ClusterID
+	}
 
 	log.Infof("Adding route reflector label to %s", node.GetName())
 	if err := r.Client.Update(context.Background(), node); err != nil {
@@ -238,9 +223,11 @@ func (r *RouteReflectorConfigReconciler) updateBGPStatus(req ctrl.Request, node 
 		return false, err
 	}
 
-	if err := r.updateRouteReflectorClusterID(req, node, r.config.ClusterID); err != nil {
-		log.Errorf("Unable to update Calico node %s because of %s", node.GetName(), err.Error())
-		return false, err
+	if r.config.DataStoreType == calicoApiConfig.EtcdV3 {
+		if err := r.updateRouteReflectorClusterID(req, node, r.config.ClusterID); err != nil {
+			log.Errorf("Unable to update Calico node %s because of %s", node.GetName(), err.Error())
+			return false, err
+		}
 	}
 
 	return true, nil
@@ -272,6 +259,7 @@ func (r *RouteReflectorConfigReconciler) updateRouteReflectorClusterID(req ctrl.
 
 	calicoNode.Spec.BGP.RouteReflectorClusterID = clusterID
 
+	log.Infof("Adding route reflector cluster ID in %s to %s for %s", calicoNode.GetName(), clusterID, node.GetName())
 	calicoNode, err = r.CalicoClient.Nodes().Update(context.Background(), calicoNode, options.SetOptions{})
 	if err != nil {
 		log.Errorf("Unable to update Calico node %s because of %s", node.GetName(), err.Error())
@@ -281,6 +269,50 @@ func (r *RouteReflectorConfigReconciler) updateRouteReflectorClusterID(req ctrl.
 	delete(routeReflectorsUnderOperation, node.GetUID())
 
 	return nil
+}
+
+func (r *RouteReflectorConfigReconciler) newNodeListOptions(node *corev1.Node) client.ListOptions {
+	listOptions := client.ListOptions{}
+	if r.config.ZoneLabel != "" {
+		if nodeZone, ok := node.GetLabels()[r.config.ZoneLabel]; ok {
+			labels := client.MatchingLabels{r.config.ZoneLabel: nodeZone}
+			labels.ApplyToList(&listOptions)
+		} else {
+			sel := labels.NewSelector()
+			r, err := labels.NewRequirement(r.config.ZoneLabel, selection.DoesNotExist, nil)
+			if err != nil {
+				log.Fatalf("Unable to create anti label selector because of %s", err.Error())
+			}
+			sel = sel.Add(*r)
+			listOptions.LabelSelector = sel
+		}
+	}
+
+	return listOptions
+}
+
+func (r *RouteReflectorConfigReconciler) revertKubernetesNode(status bool, node *corev1.Node) (ctrl.Result, error) {
+	if status {
+		delete(node.Labels, r.config.NodeLabelKey)
+		if r.config.DataStoreType == calicoApiConfig.Kubernetes {
+			delete(node.Annotations, routeReflectorClusterIDAnnotation)
+		}
+	} else {
+		node.Labels[r.config.NodeLabelKey] = r.config.NodeLabelValue
+		if r.config.DataStoreType == calicoApiConfig.Kubernetes {
+			node.Annotations[routeReflectorClusterIDAnnotation] = r.config.ClusterID
+		}
+	}
+
+	log.Infof("Revert route reflector label on %s to %t", node.GetName(), !status)
+	if err := r.Client.Update(context.Background(), node); err != nil && !errors.IsNotFound(err) {
+		log.Errorf("Failed to revert node %s because of %s", node.GetName(), err.Error())
+		return nodeRevertError, err
+	}
+
+	delete(routeReflectorsUnderOperation, node.GetUID())
+
+	return nodeReverted, nil
 }
 
 func isNodeReady(node *corev1.Node) bool {
