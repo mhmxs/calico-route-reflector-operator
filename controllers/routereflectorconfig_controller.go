@@ -153,6 +153,10 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		}
 	}
 
+	if expectedNumber != actualReadyNumber {
+		log.Infof("Actual number %d is different than expected %d", actualReadyNumber, expectedNumber)
+	}
+
 	return finished, nil
 }
 
