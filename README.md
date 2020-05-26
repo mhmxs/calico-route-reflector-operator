@@ -37,7 +37,7 @@ Build your own image:
 
 ## Roadmap
 
- * Etcd data store support
+ * Etcd data store support (Currently you have to edit manager's yaml manually)
  * Use custom resource instead of environment variables
  * Dedicated or preferred node label
  * Disallow node label

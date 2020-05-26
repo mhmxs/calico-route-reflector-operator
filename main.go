@@ -208,6 +208,7 @@ func initCalicoConfig(dataStoreType string) (calicoClient.Interface, error) {
 	case "kubernetes":
 		calicoConfig := calicoApiConfig.NewCalicoAPIConfig()
 		calicoConfig.Spec = calicoApiConfig.CalicoAPIConfigSpec{
+			DatastoreType: calicoApiConfig.Kubernetes,
 			KubeConfig: calicoApiConfig.KubeConfig{
 				K8sAPIEndpoint: os.Getenv("K8S_API_ENDPOINT"),
 				K8sCAFile:      os.Getenv("K8S_CA_FILE"),
