@@ -86,24 +86,24 @@ type reconcileImplClient interface {
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;update;watch
 
 func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = r.Log.WithValues("routereflectorconfig", req.NamespacedName)
+	_ = r.Log.WithValues("routereflectorconfig", req.Name)
 
 	node := corev1.Node{}
 	if err := r.Client.Get(context.Background(), req.NamespacedName, &node); err != nil && !errors.IsNotFound(err) {
-		log.Errorf("Unable to fetch node %s because of %s", req.NamespacedName, err.Error())
+		log.Errorf("Unable to fetch node %s because of %s", req.Name, err.Error())
 		return nodeGetError, err
 	} else if errors.IsNotFound(err) {
-		log.Debugf("Node not found %s", req.NamespacedName)
+		log.Debugf("Node not found %s", req.Name)
 		return nodeNotFound, nil
 	} else if err == nil && isLabeled(node.GetLabels(), r.config.NodeLabelKey, r.config.NodeLabelValue) && node.GetDeletionTimestamp() != nil ||
 		!isNodeReady(&node) || !isNodeSchedulable(&node) {
 		// Node is deleted right now or has some issues, better to remove form RRs
 		if err := r.cleanupBGPStatus(req, &node); err != nil {
-			log.Errorf("Unable to cleanup label on %s because of %s", req.NamespacedName, err.Error())
+			log.Errorf("Unable to cleanup label on %s because of %s", req.Name, err.Error())
 			return nodeCleanupError, err
 		}
 
-		log.Infof("Label was removed from node %s time to re-reconcile", req.NamespacedName)
+		log.Infof("Label was removed from node %s time to re-reconcile", req.Name)
 		return nodeCleaned, nil
 	}
 
@@ -116,7 +116,7 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 			sel := labels.NewSelector()
 			r, err := labels.NewRequirement(r.config.ZoneLabel, selection.DoesNotExist, nil)
 			if err != nil {
-				log.Errorf("Unable to create anti label selector on node %s because of %s", req.NamespacedName, err.Error())
+				log.Fatalf("Unable to create anti label selector because of %s", err.Error())
 				return labelSelectorError, nil
 			}
 			sel = sel.Add(*r)
@@ -145,24 +145,24 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 				n.Labels[r.config.NodeLabelKey] = r.config.NodeLabelValue
 			}
 
-			log.Infof("Revert route reflector label on %s to %t", req.NamespacedName, !status)
+			log.Infof("Revert route reflector label on %s to %t", n.GetName(), !status)
 			if err := r.Client.Update(context.Background(), n); err != nil && !errors.IsNotFound(err) {
-				log.Errorf("Failed to revert node %s because of %s", req.NamespacedName, err.Error())
+				log.Errorf("Failed to revert node %s because of %s", n.GetName(), err.Error())
 				return nodeRevertError, err
 			}
 
 			delete(routeReflectorsUnderOperation, n.GetUID())
 
 			return nodeReverted, nil
-		} else if !isReady {
+		}
+
+		if !isReady || expectedNumber == actualReadyNumber {
 			continue
-		} else if expectedNumber == actualReadyNumber {
-			break
 		}
 
 		if diff := expectedNumber - actualReadyNumber; diff != 0 {
 			if updated, err := r.updateBGPStatus(req, n, diff); err != nil {
-				log.Errorf("Unable to update node %s because of %s", req.NamespacedName, err.Error())
+				log.Errorf("Unable to update node %s because of %s", n.GetName(), err.Error())
 				return nodeUpdateError, err
 			} else if updated && diff > 0 {
 				actualReadyNumber++
@@ -205,14 +205,14 @@ func (r *RouteReflectorConfigReconciler) collectNodeInfo(allNodes []corev1.Node)
 func (r *RouteReflectorConfigReconciler) cleanupBGPStatus(req ctrl.Request, node *corev1.Node) error {
 	delete(node.Labels, r.config.NodeLabelKey)
 
-	log.Infof("Removing route reflector label from %s", req.NamespacedName)
+	log.Infof("Removing route reflector label from %s", node.GetName())
 	if err := r.Client.Update(context.Background(), node); err != nil {
-		log.Errorf("Unable to cleanup node %s because of %s", req.NamespacedName, err.Error())
+		log.Errorf("Unable to cleanup node %s because of %s", node.GetName(), err.Error())
 		return err
 	}
 
 	if err := r.updateRouteReflectorClusterID(req, node, ""); err != nil {
-		log.Errorf("Unable to cleanup Calico node %s because of %s", req.NamespacedName, err.Error())
+		log.Errorf("Unable to cleanup Calico node %s because of %s", node.GetName(), err.Error())
 		return err
 	}
 
@@ -228,14 +228,14 @@ func (r *RouteReflectorConfigReconciler) updateBGPStatus(req ctrl.Request, node 
 
 	node.Labels[r.config.NodeLabelKey] = r.config.NodeLabelValue
 
-	log.Infof("Adding route reflector label to %s", req.NamespacedName)
+	log.Infof("Adding route reflector label to %s", node.GetName())
 	if err := r.Client.Update(context.Background(), node); err != nil {
-		log.Errorf("Unable to update node %s because of %s", req.NamespacedName, err.Error())
+		log.Errorf("Unable to update node %s because of %s", node.GetName(), err.Error())
 		return false, err
 	}
 
 	if err := r.updateRouteReflectorClusterID(req, node, r.config.ClusterID); err != nil {
-		log.Errorf("Unable to update Calico node %s because of %s", req.NamespacedName, err.Error())
+		log.Errorf("Unable to update Calico node %s because of %s", node.GetName(), err.Error())
 		return false, err
 	}
 
@@ -245,22 +245,23 @@ func (r *RouteReflectorConfigReconciler) updateBGPStatus(req ctrl.Request, node 
 func (r *RouteReflectorConfigReconciler) updateRouteReflectorClusterID(req ctrl.Request, node *corev1.Node, clusterID string) error {
 	routeReflectorsUnderOperation[node.GetUID()] = clusterID != ""
 
-	log.Debugf("Fetching Calico node object of %s", req.NamespacedName)
+	log.Debugf("Fetching Calico node object of %s", node.GetName())
 	calicoNodes, err := r.CalicoClient.Nodes().List(context.Background(), options.ListOptions{})
 	if err != nil {
-		log.Errorf("Unable to fetch Calico nodes %s because of %s", req.NamespacedName, err.Error())
+		log.Errorf("Unable to fetch Calico nodes %s because of %s", node.GetName(), err.Error())
 		return err
 	}
 
 	var calicoNode *calicoApi.Node
 	for _, cn := range calicoNodes.Items {
 		if hostname, ok := cn.GetLabels()["kubernetes.io/hostname"]; ok && hostname == node.GetLabels()["kubernetes.io/hostname"] {
+			log.Infof("Calico node found %s for %s-%s", cn.GetName(), node.GetNamespace(), node.GetName())
 			calicoNode = &cn
 			break
 		}
 	}
 	if calicoNode == nil {
-		err := fmt.Errorf("Unable to find Calico node for %s", req.NamespacedName)
+		err := fmt.Errorf("Unable to find Calico node for %s", node.GetName())
 		log.Error(err.Error())
 		return err
 	}
@@ -269,7 +270,7 @@ func (r *RouteReflectorConfigReconciler) updateRouteReflectorClusterID(req ctrl.
 
 	calicoNode, err = r.CalicoClient.Nodes().Update(context.Background(), calicoNode, options.SetOptions{})
 	if err != nil {
-		log.Errorf("Unable to update Calico node %s because of %s", req.NamespacedName, err.Error())
+		log.Errorf("Unable to update Calico node %s because of %s", node.GetName(), err.Error())
 		return err
 	}
 
@@ -321,6 +322,7 @@ func (ef eventFilter) Generic(event.GenericEvent) bool {
 func (r *RouteReflectorConfigReconciler) SetupWithManager(mgr ctrl.Manager, config RouteReflectorConfig) error {
 	log.Infof("Given configuration is: %v", config)
 	r.config = config
+	// WARNING !!! The reconcile implementation IS NOT THREAD SAFE and HAS STATE !!! PLease DO NOT inrease number of instances more than 1 !!!
 	return ctrl.NewControllerManagedBy(mgr).
 		WithEventFilter(eventFilter{}).
 		For(&corev1.Node{}).
