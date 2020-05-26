@@ -206,21 +206,26 @@ func fetchAPIToken(path string) string {
 
 func newCalicoClient(dataStoreType string) (calicoApiConfig.DatastoreType, calicoClient.Interface, error) {
 	switch dataStoreType {
-	case "kubernetes":
+	case "incluster":
 		calicoConfig := calicoApiConfig.NewCalicoAPIConfig()
 		calicoConfig.Spec = calicoApiConfig.CalicoAPIConfigSpec{
 			DatastoreType: calicoApiConfig.Kubernetes,
 			KubeConfig: calicoApiConfig.KubeConfig{
 				K8sAPIEndpoint: os.Getenv("K8S_API_ENDPOINT"),
-				K8sCAFile:      os.Getenv("K8S_CA_FILE"),
-				K8sAPIToken:    fetchAPIToken(os.Getenv("K8S_TOKEN_FILE")),
+				K8sCAFile:      "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
+				K8sAPIToken:    fetchAPIToken("/var/run/secrets/kubernetes.io/serviceaccount/token"),
 			},
 		}
 		client, err := calicoClient.New(*calicoConfig)
 
 		return calicoApiConfig.Kubernetes, client, err
+	case "kubernetes":
+		client, err := calicoClient.NewFromEnv()
+
+		return calicoApiConfig.Kubernetes, client, err
 	case "etcd":
 		client, err := calicoClient.NewFromEnv()
+
 		return calicoApiConfig.EtcdV3, client, err
 	default:
 		panic("Type not supported: " + dataStoreType)
