@@ -2,13 +2,17 @@
 
 # Calico Route Reflector Operator
 
-### This project is work in progress !!!
-
 ### Use your own risk !!!
 
-### Proposal documentation found here: https://github.com/mhmxs/calico-route-reflector-operator-proposal. Please feel free to share your ideas!!!
+### Proposal documentation found here: https://github.com/mhmxs/calico-route-reflector-operator-proposal. Please feel free to share your ideas !!!
 
-This Kubernetes operator can monitor and scale Calico route refloctor pods based on cluster size. The operator has a few environment variable:
+## Prerequisites
+
+ * Kubernetes cluster up and running
+ * Calico network on Kubernetes data store a.k.a. `KDD`.
+ * Configured Calico `BGPPeer`s one for route reflector mesh and an other for clients. [More info](https://docs.projectcalico.org/getting-started/kubernetes/hardway/configure-bgp-peering)
+
+This Kubernetes operator can monitor and scale Calico route refloctor pods based on node number per zone. The operator owns a few environment variables:
  * `ROUTE_REFLECTOR_CLUSTER_ID` Route reflector cluster ID, default `224.0.0.1`
  * `ROUTE_REFLECTOR_MIN` Minimum number of route reflector pods per zone, default `3`
  * `ROUTE_REFLECTOR_MAX` Maximum number of route reflector pods per zone, default `25`
@@ -33,6 +37,7 @@ Build your own image:
 
 ## Roadmap
 
+ * Etcd data store support
  * Use custom resource instead of environment variables
  * Dedicated or preferred node label
  * Disallow node label

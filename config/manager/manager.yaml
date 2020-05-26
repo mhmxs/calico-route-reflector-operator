@@ -30,8 +30,12 @@ spec:
         env:
           - name: DATASTORE_TYPE
             value: "kubernetes"
-          - name: KUBECONFIG
-            value: /root/.kube/config
+          - name: K8S_API_ENDPOINT
+            value: "https://kubernetes.default"
+          - name: K8S_CA_FILE
+            value: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+          - name: K8S_TOKEN_FILE
+            value: "/var/run/secrets/kubernetes.io/serviceaccount/token"
         image: controller:latest
         imagePullPolicy: Always
         name: manager

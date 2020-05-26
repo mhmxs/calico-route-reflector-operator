@@ -20,10 +20,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
 
+	calicoApiConfig "github.com/projectcalico/libcalico-go/lib/apiconfig"
 	calicoClient "github.com/projectcalico/libcalico-go/lib/clientv3"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -94,13 +96,22 @@ func main() {
 		panic(err)
 	}
 
-	min, max, clusterID, ratio, nodeLabelKey, nodeLabelValue, zoneLabel := parseEnv()
-
-	cc, err := calicoClient.NewFromEnv()
+	calicoConfig := calicoApiConfig.NewCalicoAPIConfig()
+	calicoConfig.Spec = calicoApiConfig.CalicoAPIConfigSpec{
+		KubeConfig: calicoApiConfig.KubeConfig{
+			K8sAPIEndpoint: os.Getenv("K8S_API_ENDPOINT"),
+			K8sCAFile:      os.Getenv("K8S_CA_FILE"),
+			K8sAPIToken:    fetchAPIToken(os.Getenv("K8S_TOKEN_FILE")),
+		},
+	}
+	cc, err := calicoClient.New(*calicoConfig)
 	if err != nil {
 		setupLog.Error(err, "unable create Calico config from env")
 		panic(err)
 	}
+
+	min, max, clusterID, ratio, nodeLabelKey, nodeLabelValue, zoneLabel := parseEnv()
+
 	if err = (&controllers.RouteReflectorConfigReconciler{
 		Client:       mgr.GetClient(),
 		CalicoClient: cc,
@@ -188,4 +199,14 @@ func getKeyValue(label string) (string, string) {
 	}
 
 	return keyValue[0], keyValue[1]
+}
+
+func fetchAPIToken(path string) string {
+	content, err := ioutil.ReadFile(path)
+	if err != nil {
+		setupLog.Error(err, "unable to find token")
+		panic(err)
+	}
+
+	return string(content)
 }

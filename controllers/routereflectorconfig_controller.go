@@ -84,6 +84,7 @@ type reconcileImplClient interface {
 // +kubebuilder:rbac:groups=route-reflector.calico-route-reflector-operator.mhmxs.github.com,resources=routereflectorconfigs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=route-reflector.calico-route-reflector-operator.mhmxs.github.com,resources=routereflectorconfigs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;update;watch
+// +kubebuilder:rbac:groups="projectcalico.org/v3",resources=nodes,verbs=list;update
 
 func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("routereflectorconfig", req.Name)
@@ -137,8 +138,9 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 	expectedNumber := r.calculateExpectedNumber(readyNodes)
 	log.Infof("Expected number of route reflector nodes are %d", expectedNumber)
 
-	for n, isReady := range nodes {
+	for n := range nodes {
 		if status, ok := routeReflectorsUnderOperation[n.GetUID()]; ok {
+			// Node was under operation, better to revert it
 			if status {
 				delete(n.Labels, r.config.NodeLabelKey)
 			} else {
@@ -155,7 +157,9 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 
 			return nodeReverted, nil
 		}
+	}
 
+	for n, isReady := range nodes {
 		if !isReady || expectedNumber == actualReadyNumber {
 			continue
 		}
