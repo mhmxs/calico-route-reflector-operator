@@ -96,17 +96,9 @@ func main() {
 		panic(err)
 	}
 
-	calicoConfig := calicoApiConfig.NewCalicoAPIConfig()
-	calicoConfig.Spec = calicoApiConfig.CalicoAPIConfigSpec{
-		KubeConfig: calicoApiConfig.KubeConfig{
-			K8sAPIEndpoint: os.Getenv("K8S_API_ENDPOINT"),
-			K8sCAFile:      os.Getenv("K8S_CA_FILE"),
-			K8sAPIToken:    fetchAPIToken(os.Getenv("K8S_TOKEN_FILE")),
-		},
-	}
-	cc, err := calicoClient.New(*calicoConfig)
+	calicoClient, err := initCalicoConfig(os.Getenv("DATASTORE_TYPE"))
 	if err != nil {
-		setupLog.Error(err, "unable create Calico config from env")
+		setupLog.Error(err, "unable create Calico config")
 		panic(err)
 	}
 
@@ -114,7 +106,7 @@ func main() {
 
 	if err = (&controllers.RouteReflectorConfigReconciler{
 		Client:       mgr.GetClient(),
-		CalicoClient: cc,
+		CalicoClient: calicoClient,
 		Log:          ctrl.Log.WithName("controllers").WithName("RouteReflectorConfig"),
 		Scheme:       mgr.GetScheme(),
 	}).SetupWithManager(mgr, controllers.RouteReflectorConfig{
@@ -209,4 +201,23 @@ func fetchAPIToken(path string) string {
 	}
 
 	return string(content)
+}
+
+func initCalicoConfig(dataStoreType string) (calicoClient.Interface, error) {
+	switch dataStoreType {
+	case "kubernetes":
+		calicoConfig := calicoApiConfig.NewCalicoAPIConfig()
+		calicoConfig.Spec = calicoApiConfig.CalicoAPIConfigSpec{
+			KubeConfig: calicoApiConfig.KubeConfig{
+				K8sAPIEndpoint: os.Getenv("K8S_API_ENDPOINT"),
+				K8sCAFile:      os.Getenv("K8S_CA_FILE"),
+				K8sAPIToken:    fetchAPIToken(os.Getenv("K8S_TOKEN_FILE")),
+			},
+		}
+		return calicoClient.New(*calicoConfig)
+	case "etcd":
+		return calicoClient.NewFromEnv()
+	default:
+		panic("Type not supported: " + dataStoreType)
+	}
 }
