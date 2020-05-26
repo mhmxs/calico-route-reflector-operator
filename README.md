@@ -24,7 +24,7 @@ During the `api/core/v1/Node` reconcile phases it calculates the right number of
 
 ## Usage
 
-This is a standard Kubebuilder opertor so building and deploying process is similar as a (stock Kubebuilder project)[https://book.kubebuilder.io/cronjob-tutorial/running.html].
+This is a standard Kubebuilder opertor so building and deploying process is similar as a [stock Kubebuilder project](https://book.kubebuilder.io/cronjob-tutorial/running.html).
 
 Use official image:
 ```
@@ -37,7 +37,7 @@ Build your own image:
 
 ## Roadmap
 
- * Etcd data store support (Currently you have to edit manager's yaml manually)
+ * Etcd data store support (Currently you have to edit [manager](config/manager/manager.yaml)'s yaml manually)
  * Use custom resource instead of environment variables
  * Dedicated or preferred node label
  * Disallow node label
