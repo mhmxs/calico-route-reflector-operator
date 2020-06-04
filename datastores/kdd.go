@@ -16,11 +16,7 @@ limitations under the License.
 package datastores
 
 import (
-	"fmt"
-	"hash/fnv"
-
 	"github.com/mhmxs/calico-route-reflector-operator/topologies"
-	uuid "github.com/satori/go.uuid"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -42,9 +38,7 @@ func (d *KddDataStore) RemoveRRStatus(node *corev1.Node) error {
 
 func (d *KddDataStore) AddRRStatus(node *corev1.Node) error {
 	labelKey, labelValue := d.topology.GetNodeLabel()
-	h := fnv.New32a()
-	h.Write([]byte(uuid.NewV4().String()))
-	node.Labels[labelKey] = fmt.Sprintf("%s-%d", labelValue, h.Sum32())
+	node.Labels[labelKey] = labelValue
 
 	clusterID := d.topology.GetClusterID()
 	node.Annotations[routeReflectorClusterIDAnnotation] = clusterID
