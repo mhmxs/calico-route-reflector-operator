@@ -99,7 +99,21 @@ func main() {
 	}
 
 	min, max, clusterID, ratio, nodeLabelKey, nodeLabelValue, zoneLabel := parseEnv()
-	topology := topologies.NewSingleTopology(nodeLabelKey, nodeLabelValue, zoneLabel, clusterID, min, max, ratio)
+	topologyConfig := topologies.Config{
+		NodeLabelKey:   nodeLabelKey,
+		NodeLabelValue: nodeLabelValue,
+		ZoneLabel:      zoneLabel,
+		ClusterID:      clusterID,
+		Min:            min,
+		Max:            max,
+		Ration:         ratio,
+	}
+	var topology topologies.Topology
+	if t, ok := os.LookupEnv("ROUTE_REFLECTOR_TOPOLOGY"); ok && t == "multi" {
+		topology = topologies.NewMultiTopology(topologyConfig)
+	} else {
+		topology = topologies.NewSingleTopology(topologyConfig)
+	}
 
 	dsType, calicoClient, err := newCalicoClient(os.Getenv("DATASTORE_TYPE"))
 	if err != nil {

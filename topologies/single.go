@@ -25,37 +25,31 @@ import (
 )
 
 type SingleTopology struct {
-	nodeLabelKey   string
-	nodeLabelValue string
-	zoneLabel      string
-	clusterID      string
-	min            int
-	max            int
-	ration         float64
+	Config
 }
 
-func (t *SingleTopology) IsLabeled(labels map[string]string) bool {
-	label, ok := labels[t.nodeLabelKey]
-	return ok && label == t.nodeLabelValue
+func (t *SingleTopology) IsLabeled(_ string, labels map[string]string) bool {
+	label, ok := labels[t.NodeLabelKey]
+	return ok && label == t.NodeLabelValue
 }
 
-func (t *SingleTopology) GetClusterID() string {
-	return fmt.Sprintf(t.clusterID, 1)
+func (t *SingleTopology) GetClusterID(string) string {
+	return fmt.Sprintf(t.ClusterID, 1)
 }
 
-func (t *SingleTopology) GetNodeLabel() (string, string) {
-	return t.nodeLabelKey, t.nodeLabelValue
+func (t *SingleTopology) GetNodeLabel(string) (string, string) {
+	return t.NodeLabelKey, t.NodeLabelValue
 }
 
 func (t *SingleTopology) NewNodeListOptions(nodeLabels map[string]string) client.ListOptions {
 	listOptions := client.ListOptions{}
-	if t.zoneLabel != "" {
-		if nodeZone, ok := nodeLabels[t.zoneLabel]; ok {
-			labels := client.MatchingLabels{t.zoneLabel: nodeZone}
+	if t.ZoneLabel != "" {
+		if nodeZone, ok := nodeLabels[t.ZoneLabel]; ok {
+			labels := client.MatchingLabels{t.ZoneLabel: nodeZone}
 			labels.ApplyToList(&listOptions)
 		} else {
 			sel := labels.NewSelector()
-			r, err := labels.NewRequirement(t.zoneLabel, selection.DoesNotExist, nil)
+			r, err := labels.NewRequirement(t.ZoneLabel, selection.DoesNotExist, nil)
 			if err != nil {
 				panic(fmt.Sprintf("Unable to create anti label selector because of %s", err.Error()))
 			}
@@ -68,22 +62,22 @@ func (t *SingleTopology) NewNodeListOptions(nodeLabels map[string]string) client
 }
 
 func (t *SingleTopology) CalculateExpectedNumber(readyNodes int) int {
-	exp := math.Round(float64(readyNodes) * t.ration)
-	exp = math.Max(exp, float64(t.min))
-	exp = math.Min(exp, float64(t.max))
+	exp := math.Round(float64(readyNodes) * t.Ration)
+	exp = math.Max(exp, float64(t.Min))
+	exp = math.Min(exp, float64(t.Max))
 	exp = math.Min(exp, float64(readyNodes))
 	exp = math.RoundToEven(exp)
 	return int(exp)
 }
 
-func NewSingleTopology(nodeLabelKey, nodeLabelValue, zoneLabel, clusterID string, min, max int, ratio float64) Topology {
+func (t *SingleTopology) AddRRSuccess(string) {
+}
+
+func (t *SingleTopology) RemoveRRSuccess(string) {
+}
+
+func NewSingleTopology(config Config) Topology {
 	return &SingleTopology{
-		nodeLabelKey:   nodeLabelKey,
-		nodeLabelValue: nodeLabelValue,
-		zoneLabel:      zoneLabel,
-		clusterID:      clusterID,
-		min:            min,
-		max:            max,
-		ration:         ratio,
+		Config: config,
 	}
 }

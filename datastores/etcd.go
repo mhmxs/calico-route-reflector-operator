@@ -33,17 +33,17 @@ type EtcdDataStore struct {
 }
 
 func (d *EtcdDataStore) RemoveRRStatus(node *corev1.Node) error {
-	nodeLabelKey, _ := d.topology.GetNodeLabel()
+	nodeLabelKey, _ := d.topology.GetNodeLabel(string(node.GetUID()))
 	delete(node.Labels, nodeLabelKey)
 
 	return d.updateRouteReflectorClusterID(node, "")
 }
 
 func (d *EtcdDataStore) AddRRStatus(node *corev1.Node) error {
-	labelKey, labelValue := d.topology.GetNodeLabel()
+	labelKey, labelValue := d.topology.GetNodeLabel(string(node.GetUID()))
 	node.Labels[labelKey] = labelValue
 
-	return d.updateRouteReflectorClusterID(node, d.topology.GetClusterID())
+	return d.updateRouteReflectorClusterID(node, d.topology.GetClusterID(string(node.GetUID())))
 }
 
 func (d *EtcdDataStore) updateRouteReflectorClusterID(node *corev1.Node, clusterID string) error {

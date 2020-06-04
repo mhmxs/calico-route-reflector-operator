@@ -81,7 +81,7 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 	} else if errors.IsNotFound(err) {
 		log.Debugf("Node not found %s", req.Name)
 		return nodeNotFound, nil
-	} else if err == nil && r.Topology.IsLabeled(node.GetLabels()) && node.GetDeletionTimestamp() != nil ||
+	} else if err == nil && r.Topology.IsLabeled(string(node.GetUID()), node.GetLabels()) && node.GetDeletionTimestamp() != nil ||
 		!isNodeReady(&node) || !isNodeSchedulable(&node) {
 		// Node is deleted right now or has some issues, better to remove form RRs
 		if err := r.removeRRStatus(req, &node); err != nil {
@@ -172,11 +172,13 @@ func (r *RouteReflectorConfigReconciler) removeRRStatus(req ctrl.Request, node *
 
 	delete(routeReflectorsUnderOperation, node.GetUID())
 
+	r.Topology.RemoveRRSuccess(string(node.GetUID()))
+
 	return nil
 }
 
 func (r *RouteReflectorConfigReconciler) updateRRStatus(node *corev1.Node, diff int) (bool, error) {
-	if labeled := r.Topology.IsLabeled(node.GetLabels()); labeled && diff < 0 {
+	if labeled := r.Topology.IsLabeled(string(node.GetUID()), node.GetLabels()); labeled && diff < 0 {
 		return true, r.Datastore.RemoveRRStatus(node)
 	} else if labeled || diff <= 0 {
 		return false, nil
@@ -194,6 +196,8 @@ func (r *RouteReflectorConfigReconciler) updateRRStatus(node *corev1.Node, diff 
 
 	delete(routeReflectorsUnderOperation, node.GetUID())
 
+	r.Topology.AddRRSuccess(string(node.GetUID()))
+
 	return true, nil
 }
 
@@ -206,7 +210,7 @@ func (r *RouteReflectorConfigReconciler) collectNodeInfo(allNodes []corev1.Node)
 		filtered[&n] = isReady && isSchedulable
 		if isReady && isSchedulable {
 			readyNodes++
-			if r.Topology.IsLabeled(n.GetLabels()) {
+			if r.Topology.IsLabeled(string(n.GetUID()), n.GetLabels()) {
 				actualReadyNumber++
 			}
 		}

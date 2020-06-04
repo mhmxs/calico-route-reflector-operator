@@ -29,7 +29,7 @@ type KddDataStore struct {
 }
 
 func (d *KddDataStore) RemoveRRStatus(node *corev1.Node) error {
-	nodeLabelKey, _ := d.topology.GetNodeLabel()
+	nodeLabelKey, _ := d.topology.GetNodeLabel(string(node.GetUID()))
 	delete(node.Labels, nodeLabelKey)
 	delete(node.Annotations, routeReflectorClusterIDAnnotation)
 
@@ -37,10 +37,10 @@ func (d *KddDataStore) RemoveRRStatus(node *corev1.Node) error {
 }
 
 func (d *KddDataStore) AddRRStatus(node *corev1.Node) error {
-	labelKey, labelValue := d.topology.GetNodeLabel()
+	labelKey, labelValue := d.topology.GetNodeLabel(string(node.GetUID()))
 	node.Labels[labelKey] = labelValue
 
-	clusterID := d.topology.GetClusterID()
+	clusterID := d.topology.GetClusterID(string(node.GetUID()))
 	node.Annotations[routeReflectorClusterIDAnnotation] = clusterID
 
 	return nil

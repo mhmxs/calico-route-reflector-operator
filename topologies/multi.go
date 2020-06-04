@@ -15,34 +15,75 @@ limitations under the License.
 */
 package topologies
 
-// import (
-// 	"fmt"
-// 	"math"
-// 	"strconv"
-// )
+import (
+	"fmt"
 
-// // MultiTopology represent a multi cluster topology
-// type MultiTopology struct {
-// 	nodeLabelKey string
-// }
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
 
-// func (t *MultiTopology) IsLabeled(labels map[string]string, key, value string) bool {
-// 	_, ok := labels[key]
-// 	return ok
-// }
+var routeReflectors = map[string]int{}
 
-// func (t *MultiTopology) GetClusterID() string {
-// 	nodeID := int(math.Abs(float64(diff)))
-// 	return fmt.Sprintf("224.0.0.%d", nodeID)
-// }
+type MultiTopology struct {
+	Config
+	single SingleTopology
+}
 
-// func (t *MultiTopology) GetNodeLabel() (string, string) {
-// 	return t.nodeLabelKey, strconv.Itoa(nodeID)
-// }
+func (t *MultiTopology) IsLabeled(nodeID string, labels map[string]string) bool {
+	label, ok := labels[t.NodeLabelKey]
+	return ok && label == t.getNodeLabel(nodeID)
+}
 
-// // NewTopology creates a new topology instance
-// func NewTopology(nodeLabelKey string) *MultiTopology {
-// 	return &MultiTopology{
-// 		nodeLabelKey: nodeLabelKey,
-// 	}
-// }
+func (t *MultiTopology) GetClusterID(nodeID string) string {
+	return fmt.Sprintf(t.ClusterID, nodeID)
+}
+
+func (t *MultiTopology) GetNodeLabel(nodeID string) (string, string) {
+	return t.NodeLabelKey, t.getNodeLabel(nodeID)
+}
+
+func (t *MultiTopology) NewNodeListOptions(nodeLabels map[string]string) client.ListOptions {
+	return t.single.NewNodeListOptions(nodeLabels)
+}
+
+func (t *MultiTopology) CalculateExpectedNumber(readyNodes int) int {
+	return t.single.CalculateExpectedNumber(readyNodes)
+}
+
+func (t *MultiTopology) getNodeLabel(nodeID string) string {
+	return fmt.Sprintf("%s-%d", t.NodeLabelValue, getRouteReflectorID(nodeID))
+}
+
+func (t *MultiTopology) AddRRSuccess(nodeID string) {
+	routeReflectors[nodeID] = getRouteReflectorID(nodeID)
+}
+
+func (t *MultiTopology) RemoveRRSuccess(nodeID string) {
+	delete(routeReflectors, nodeID)
+}
+
+// TODO this method has several performance issues, needs to fix later
+func getRouteReflectorID(nodeID string) int {
+	if existing, ok := routeReflectors[nodeID]; ok {
+		return existing
+	}
+
+	existingIDs := map[int]bool{}
+	for _, ID := range routeReflectors {
+		existingIDs[ID] = true
+	}
+
+	for i := 0; ; i++ {
+		if _, ok := existingIDs[i]; !ok {
+			return i
+		}
+	}
+}
+
+func NewMultiTopology(config Config) Topology {
+	return &MultiTopology{
+		Config: config,
+		single: SingleTopology{
+			Config: config,
+		},
+	}
+}

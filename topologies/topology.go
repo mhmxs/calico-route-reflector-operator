@@ -16,12 +16,26 @@ limitations under the License.
 
 package topologies
 
-import "sigs.k8s.io/controller-runtime/pkg/client"
+import (
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
 
 type Topology interface {
-	IsLabeled(map[string]string) bool
-	GetClusterID() string
-	GetNodeLabel() (string, string)
+	IsLabeled(string, map[string]string) bool
+	GetClusterID(string) string
+	GetNodeLabel(string) (string, string)
 	NewNodeListOptions(labels map[string]string) client.ListOptions
 	CalculateExpectedNumber(int) int
+	AddRRSuccess(string)
+	RemoveRRSuccess(string)
+}
+
+type Config struct {
+	NodeLabelKey   string
+	NodeLabelValue string
+	ZoneLabel      string
+	ClusterID      string
+	Min            int
+	Max            int
+	Ration         float64
 }

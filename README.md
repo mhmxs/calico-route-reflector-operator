@@ -19,6 +19,7 @@ This Kubernetes operator can monitor and scale Calico route refloctor pods based
  * `ROUTE_REFLECTOR_RATIO` Node / route reflector pod ratio, default `0.005` (`1000 * 0.005 = 5`)
  * `ROUTE_REFLECTOR_NODE_LABEL` Node label of the route reflector nodes, default `calico-route-reflector=`
  * `ROUTE_REFLECTOR_ZONE_LABEL` Node label of the zone, default ``
+ * `ROUTE_REFLECTOR_TOPOLOGY` Selected topology of route reflectors [simple, multi], defaulr: `simple`
 
 During the `api/core/v1/Node` reconcile phases it calculates the right number of route refloctor nodes per zone. It supports linear scaling only and it multiplies the number of nodes with the given ratio and than updates the route reflector replicas to the expected number.
 
