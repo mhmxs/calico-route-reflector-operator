@@ -8,6 +8,8 @@ require (
 	github.com/onsi/gomega v1.8.1
 	github.com/projectcalico/libcalico-go v1.7.2-0.20200427180741-f197f7370140
 	github.com/prometheus/common v0.4.1
+	github.com/satori/go.uuid v1.2.0
+	google.golang.org/appengine v1.5.0
 	k8s.io/api v0.17.2
 	k8s.io/apimachinery v0.17.2
 	k8s.io/client-go v0.17.2

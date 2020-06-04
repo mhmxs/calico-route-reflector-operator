@@ -36,12 +36,14 @@ import (
 
 	routereflectorv1 "github.com/mhmxs/calico-route-reflector-operator/api/v1"
 	"github.com/mhmxs/calico-route-reflector-operator/controllers"
+	"github.com/mhmxs/calico-route-reflector-operator/datastores"
+	"github.com/mhmxs/calico-route-reflector-operator/topologies"
 	"github.com/prometheus/common/log"
 	// +kubebuilder:scaffold:imports
 )
 
 const (
-	defaultClusterID              = "224.0.0.1"
+	defaultClusterID              = "224.0.0.%d"
 	defaultRouteReflectorMin      = 3
 	defaultRouteReflectorMax      = 10
 	defaultRouteReflectorRatio    = 0.005
@@ -96,29 +98,32 @@ func main() {
 		panic(err)
 	}
 
+	min, max, clusterID, ratio, nodeLabelKey, nodeLabelValue, zoneLabel := parseEnv()
+	topology := topologies.NewSingleTopology(nodeLabelKey, nodeLabelValue, zoneLabel, clusterID, min, max, ratio)
+
 	dsType, calicoClient, err := newCalicoClient(os.Getenv("DATASTORE_TYPE"))
 	if err != nil {
 		setupLog.Error(err, "unable create Calico config")
 		panic(err)
 	}
 
-	min, max, clusterID, ratio, nodeLabelKey, nodeLabelValue, zoneLabel := parseEnv()
+	var datastore datastores.Datastore
+	switch dsType {
+	case calicoApiConfig.Kubernetes:
+		datastore = datastores.NewKddDatastore(&topology)
+	case calicoApiConfig.EtcdV3:
+		datastore = datastores.NewEtcdDatastore(&topology, calicoClient)
+	default:
+		panic(fmt.Errorf("Unsupported DS %s", dsType))
+	}
 
 	if err = (&controllers.RouteReflectorConfigReconciler{
-		Client:       mgr.GetClient(),
-		CalicoClient: calicoClient,
-		Log:          ctrl.Log.WithName("controllers").WithName("RouteReflectorConfig"),
-		Scheme:       mgr.GetScheme(),
-	}).SetupWithManager(mgr, controllers.RouteReflectorConfig{
-		DataStoreType:  dsType,
-		ClusterID:      clusterID,
-		Min:            min,
-		Max:            max,
-		Ration:         ratio,
-		NodeLabelKey:   nodeLabelKey,
-		NodeLabelValue: nodeLabelValue,
-		ZoneLabel:      zoneLabel,
-	}); err != nil {
+		Client:    mgr.GetClient(),
+		Log:       ctrl.Log.WithName("controllers").WithName("RouteReflectorConfig"),
+		Scheme:    mgr.GetScheme(),
+		Topology:  topology,
+		Datastore: datastore,
+	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RouteReflectorConfig")
 		panic(err)
 	}

@@ -13,7 +13,7 @@
  * Configured Calico `BGPPeer`s one for route reflector mesh and an other for clients. [More info](https://docs.projectcalico.org/getting-started/kubernetes/hardway/configure-bgp-peering)
 
 This Kubernetes operator can monitor and scale Calico route refloctor pods based on node number per zone. The operator owns a few environment variables:
- * `ROUTE_REFLECTOR_CLUSTER_ID` Route reflector cluster ID, default `224.0.0.1`
+ * `ROUTE_REFLECTOR_CLUSTER_ID` Route reflector cluster ID, default `224.0.0.%d`
  * `ROUTE_REFLECTOR_MIN` Minimum number of route reflector pods per zone, default `3`
  * `ROUTE_REFLECTOR_MAX` Maximum number of route reflector pods per zone, default `25`
  * `ROUTE_REFLECTOR_RATIO` Node / route reflector pod ratio, default `0.005` (`1000 * 0.005 = 5`)
