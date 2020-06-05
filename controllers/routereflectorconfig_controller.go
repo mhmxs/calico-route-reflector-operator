@@ -74,17 +74,17 @@ type reconcileImplClient interface {
 func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("routereflectorconfig", req.Name)
 
-	node := corev1.Node{}
-	if err := r.Client.Get(context.Background(), req.NamespacedName, &node); err != nil && !errors.IsNotFound(err) {
+	targetNode := corev1.Node{}
+	if err := r.Client.Get(context.Background(), req.NamespacedName, &targetNode); err != nil && !errors.IsNotFound(err) {
 		log.Errorf("Unable to fetch node %s because of %s", req.Name, err.Error())
 		return nodeGetError, err
 	} else if errors.IsNotFound(err) {
 		log.Debugf("Node not found %s", req.Name)
 		return nodeNotFound, nil
-	} else if err == nil && r.Topology.IsLabeled(string(node.GetUID()), node.GetLabels()) && node.GetDeletionTimestamp() != nil ||
-		!isNodeReady(&node) || !isNodeSchedulable(&node) {
+	} else if err == nil && r.Topology.IsLabeled(string(targetNode.GetUID()), targetNode.GetLabels()) && targetNode.GetDeletionTimestamp() != nil ||
+		!isNodeReady(&targetNode) || !isNodeSchedulable(&targetNode) {
 		// Node is deleted right now or has some issues, better to remove form RRs
-		if err := r.removeRRStatus(req, &node); err != nil {
+		if err := r.removeRRStatus(req, &targetNode); err != nil {
 			log.Errorf("Unable to cleanup label on %s because of %s", req.Name, err.Error())
 			return nodeCleanupError, err
 		}
@@ -93,7 +93,7 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		return nodeCleaned, nil
 	}
 
-	listOptions := r.Topology.NewNodeListOptions(node.GetLabels())
+	listOptions := r.Topology.NewNodeListOptions(targetNode.GetLabels())
 	log.Debugf("List options are %v", listOptions)
 	nodeList := corev1.NodeList{}
 	if err := r.Client.List(context.Background(), &nodeList, &listOptions); err != nil {
@@ -118,17 +118,17 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 				err = r.Datastore.AddRRStatus(n)
 			}
 			if err != nil {
-				log.Errorf("Failed to revert node %s because of %s", node.GetName(), err.Error())
+				log.Errorf("Failed to revert node %s because of %s", n.GetName(), err.Error())
 				return nodeRevertError, err
 			}
 
-			log.Infof("Revert route reflector label on %s to %t", node.GetName(), !status)
+			log.Infof("Revert route reflector label on %s to %t", n.GetName(), !status)
 			if err := r.Client.Update(context.Background(), n); err != nil && !errors.IsNotFound(err) {
-				log.Errorf("Failed to revert update node %s because of %s", node.GetName(), err.Error())
+				log.Errorf("Failed to revert update node %s because of %s", n.GetName(), err.Error())
 				return nodeRevertUpdateError, err
 			}
 
-			delete(routeReflectorsUnderOperation, node.GetUID())
+			delete(routeReflectorsUnderOperation, n.GetUID())
 
 			return nodeReverted, nil
 		}
