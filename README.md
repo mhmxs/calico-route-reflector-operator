@@ -40,7 +40,7 @@ kustomize build config/default | kubectl apply -f -
 Use latest release:
 ```
 kustomize build config/crd | kubectl apply -f -
-$(cd config/manager && kustomize edit set image controller=mhmxs/calico-route-reflector-controller:v0.0.1)
+$(cd config/manager && kustomize edit set image controller=quay.io/mhmxs/calico-route-reflector-controller:v0.0.1)
 kustomize build config/default | kubectl apply -f -
 ```
 
