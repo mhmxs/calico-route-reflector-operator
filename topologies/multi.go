@@ -34,7 +34,7 @@ func (t *MultiTopology) IsLabeled(nodeID string, labels map[string]string) bool 
 }
 
 func (t *MultiTopology) GetClusterID(nodeID string) string {
-	return fmt.Sprintf(t.ClusterID, nodeID)
+	return fmt.Sprintf(t.ClusterID, getRouteReflectorID(nodeID))
 }
 
 func (t *MultiTopology) GetNodeLabel(nodeID string) (string, string) {
