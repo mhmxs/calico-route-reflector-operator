@@ -31,16 +31,16 @@ During the `api/core/v1/Node` reconcile phases it calculates the right number of
 
 This is a standard Kubebuilder opertor so building and deploying process is similar as a [stock Kubebuilder project](https://book.kubebuilder.io/cronjob-tutorial/running.html).
 
-Use official image:
-```
-kustomize build config/crd | kubectl apply -f -
-kustomize build config/default | kubectl apply -f -
-```
-
 Use latest release:
 ```
 kustomize build config/crd | kubectl apply -f -
 $(cd config/manager && kustomize edit set image controller=quay.io/mhmxs/calico-route-reflector-controller:v0.0.1)
+kustomize build config/default | kubectl apply -f -
+```
+
+Use official latest master image:
+```
+kustomize build config/crd | kubectl apply -f -
 kustomize build config/default | kubectl apply -f -
 ```
 
