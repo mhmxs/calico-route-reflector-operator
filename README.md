@@ -13,13 +13,17 @@
  * Configured Calico `BGPPeer`s one for route reflector mesh and an other for clients. [More info](https://docs.projectcalico.org/getting-started/kubernetes/hardway/configure-bgp-peering)
 
 This Kubernetes operator can monitor and scale Calico route refloctor pods based on node number per zone. The operator owns a few environment variables:
+ * `DATASTORE_TYPE` Calico datastore [`incluster`, `kubernetes`, `etcd`], default `incluster`
+ * `K8S_API_ENDPOINT` Kubernetes API endpoint, default `https://kubernetes.default`
  * `ROUTE_REFLECTOR_CLUSTER_ID` Route reflector cluster ID, default `224.0.0.%d`
  * `ROUTE_REFLECTOR_MIN` Minimum number of route reflector pods per zone, default `3`
  * `ROUTE_REFLECTOR_MAX` Maximum number of route reflector pods per zone, default `25`
  * `ROUTE_REFLECTOR_RATIO` Node / route reflector pod ratio, default `0.005` (`1000 * 0.005 = 5`)
  * `ROUTE_REFLECTOR_NODE_LABEL` Node label of the route reflector nodes, default `calico-route-reflector=`
  * `ROUTE_REFLECTOR_ZONE_LABEL` Node label of the zone, default ``
- * `ROUTE_REFLECTOR_TOPOLOGY` Selected topology of route reflectors [simple, multi], defaulr: `simple`
+ * `ROUTE_REFLECTOR_TOPOLOGY` Selected topology of route reflectors [simple, multi], default `simple`
+
+You can edit or add those environment variables at the [manager](config/manager/manager.yaml) manifest. You can add Calico client config related variables, Calico lib will parse it in the background.
 
 During the `api/core/v1/Node` reconcile phases it calculates the right number of route refloctor nodes per zone. It supports linear scaling only and it multiplies the number of nodes with the given ratio and than updates the route reflector replicas to the expected number.
 

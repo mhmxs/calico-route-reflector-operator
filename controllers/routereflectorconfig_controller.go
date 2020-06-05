@@ -160,7 +160,7 @@ func (r *RouteReflectorConfigReconciler) removeRRStatus(req ctrl.Request, node *
 	routeReflectorsUnderOperation[node.GetUID()] = false
 
 	if err := r.Datastore.RemoveRRStatus(node); err != nil {
-		log.Errorf("Unable to cleanup node status %s because of %s", node.GetName(), err.Error())
+		log.Errorf("Unable to cleanup RR status %s because of %s", node.GetName(), err.Error())
 		return err
 	}
 
@@ -186,7 +186,10 @@ func (r *RouteReflectorConfigReconciler) updateRRStatus(node *corev1.Node, diff 
 
 	routeReflectorsUnderOperation[node.GetUID()] = true
 
-	r.Datastore.AddRRStatus(node)
+	if err := r.Datastore.AddRRStatus(node); err != nil {
+		log.Errorf("Unable to add RR status %s because of %s", node.GetName(), err.Error())
+		return false, err
+	}
 
 	log.Infof("Adding route reflector label to %s", node.GetName())
 	if err := r.Client.Update(context.Background(), node); err != nil {
