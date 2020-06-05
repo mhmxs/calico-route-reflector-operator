@@ -37,6 +37,13 @@ kustomize build config/crd | kubectl apply -f -
 kustomize build config/default | kubectl apply -f -
 ```
 
+Use latest release:
+```
+kustomize build config/crd | kubectl apply -f -
+$(cd config/manager && kustomize edit set image controller=mhmxs/calico-route-reflector-controller:v0.0.1)
+kustomize build config/default | kubectl apply -f -
+```
+
 Build your own image:
 `IMG_REPO=[IMG_REPO] IMG_NAME=[IMG_NAME] IMG_VERSION=[IMG_VERSION] make test docker-push install deploy`
 
