@@ -17,7 +17,12 @@ package topologies
 
 import (
 	"fmt"
+	"math/rand"
+	"strconv"
 
+	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -28,7 +33,7 @@ type MultiTopology struct {
 	single SingleTopology
 }
 
-func (t *MultiTopology) IsLabeled(nodeID string, labels map[string]string) bool {
+func (t *MultiTopology) IsRouteReflector(nodeID string, labels map[string]string) bool {
 	label, ok := labels[t.NodeLabelKey]
 	return ok && label == t.getNodeLabel(nodeID)
 }
@@ -42,15 +47,72 @@ func (t *MultiTopology) GetNodeLabel(nodeID string) (string, string) {
 }
 
 func (t *MultiTopology) NewNodeListOptions(nodeLabels map[string]string) client.ListOptions {
-	return t.single.NewNodeListOptions(nodeLabels)
+	return client.ListOptions{}
 }
 
 func (t *MultiTopology) CalculateExpectedNumber(readyNodes int) int {
 	return t.single.CalculateExpectedNumber(readyNodes)
 }
 
-func (t *MultiTopology) getNodeLabel(nodeID string) string {
-	return fmt.Sprintf("%s-%d", t.NodeLabelValue, getRouteReflectorID(nodeID))
+func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList) []calicoApi.BGPPeer {
+	bgpPeerConfigs := []calicoApi.BGPPeer{}
+
+	for n, isReady := range nodes {
+		if !isReady {
+			continue
+		}
+
+		if t.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
+			selector := fmt.Sprintf("has(%s)", t.NodeLabelKey)
+			rrConfig := findBGPPeer(DefaultRouteReflectorMeshName, existingPeers)
+			if rrConfig == nil {
+				rrConfig = &calicoApi.BGPPeer{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       calicoApi.KindBGPPeer,
+						APIVersion: calicoApi.GroupVersionCurrent,
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: DefaultRouteReflectorMeshName,
+					},
+				}
+			}
+			rrConfig.Spec = calicoApi.BGPPeerSpec{
+				NodeSelector: "!" + selector,
+				PeerSelector: selector,
+			}
+
+			bgpPeerConfigs = append(bgpPeerConfigs, *rrConfig)
+
+			continue
+		}
+
+		// TODO Do it in a more sophisticaged way
+		for i := 1; i <= 3; i++ {
+			rrID := rand.Intn(len(routeReflectors))
+			name := fmt.Sprintf(DefaultRouteReflectorClientName, rrID)
+			rr := getRouteReflectorID(string(routeReflectors[rrID].GetUID()))
+
+			clientConfig := findBGPPeer(DefaultRouteReflectorMeshName, existingPeers)
+			if clientConfig == nil {
+				clientConfig = &calicoApi.BGPPeer{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       calicoApi.KindBGPPeer,
+						APIVersion: calicoApi.GroupVersionCurrent,
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: name,
+					},
+				}
+			}
+			clientConfig.Spec = calicoApi.BGPPeerSpec{
+				PeerSelector: fmt.Sprintf("%s=='%d'", t.NodeLabelKey, rr),
+			}
+
+			bgpPeerConfigs = append(bgpPeerConfigs, *clientConfig)
+		}
+	}
+
+	return bgpPeerConfigs
 }
 
 func (t *MultiTopology) AddRRSuccess(nodeID string) {
@@ -59,6 +121,13 @@ func (t *MultiTopology) AddRRSuccess(nodeID string) {
 
 func (t *MultiTopology) RemoveRRSuccess(nodeID string) {
 	delete(routeReflectors, nodeID)
+}
+
+func (t *MultiTopology) getNodeLabel(nodeID string) string {
+	if t.NodeLabelValue == "" {
+		return strconv.Itoa(getRouteReflectorID(nodeID))
+	}
+	return fmt.Sprintf("%s-%d", t.NodeLabelValue, getRouteReflectorID(nodeID))
 }
 
 // TODO this method has several performance issues, needs to fix later

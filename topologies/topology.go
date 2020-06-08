@@ -17,15 +17,24 @@ limitations under the License.
 package topologies
 
 import (
+	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	// TODO Make it configurable
+	DefaultRouteReflectorMeshName   = "rrs-to-rrs"
+	DefaultRouteReflectorClientName = "peer-to-rrs-%d"
+)
+
 type Topology interface {
-	IsLabeled(string, map[string]string) bool
+	IsRouteReflector(string, map[string]string) bool
 	GetClusterID(string) string
 	GetNodeLabel(string) (string, string)
 	NewNodeListOptions(labels map[string]string) client.ListOptions
 	CalculateExpectedNumber(int) int
+	GenerateBGPPeers([]corev1.Node, map[*corev1.Node]bool, *calicoApi.BGPPeerList) []calicoApi.BGPPeer
 	AddRRSuccess(string)
 	RemoveRRSuccess(string)
 }
@@ -38,4 +47,14 @@ type Config struct {
 	Min            int
 	Max            int
 	Ration         float64
+}
+
+func findBGPPeer(name string, peers *calicoApi.BGPPeerList) *calicoApi.BGPPeer {
+	for _, p := range peers.Items {
+		if p.GetName() == name {
+			return &p
+		}
+	}
+
+	return nil
 }

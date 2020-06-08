@@ -16,10 +16,12 @@ rules:
   - update
   - watch
 - apiGroups:
-  - projectcalico.org/v3
+  - crd.projectcalico.org
   resources:
-  - nodes
+  - bgppeers
   verbs:
+  - create
+  - get
   - list
   - update
 - apiGroups:

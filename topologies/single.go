@@ -19,6 +19,9 @@ import (
 	"fmt"
 	"math"
 
+	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,7 +31,7 @@ type SingleTopology struct {
 	Config
 }
 
-func (t *SingleTopology) IsLabeled(_ string, labels map[string]string) bool {
+func (t *SingleTopology) IsRouteReflector(_ string, labels map[string]string) bool {
 	label, ok := labels[t.NodeLabelKey]
 	return ok && label == t.NodeLabelValue
 }
@@ -68,6 +71,54 @@ func (t *SingleTopology) CalculateExpectedNumber(readyNodes int) int {
 	exp = math.Min(exp, float64(readyNodes))
 	exp = math.RoundToEven(exp)
 	return int(exp)
+}
+
+func (t *SingleTopology) GenerateBGPPeers(_ []corev1.Node, _ map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList) []calicoApi.BGPPeer {
+	bgpPeerConfigs := []calicoApi.BGPPeer{}
+
+	selector := fmt.Sprintf("has(%s)", t.NodeLabelKey)
+
+	rrConfig := findBGPPeer(DefaultRouteReflectorMeshName, existingPeers)
+	if rrConfig == nil {
+		rrConfig = &calicoApi.BGPPeer{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       calicoApi.KindBGPPeer,
+				APIVersion: calicoApi.GroupVersionCurrent,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: DefaultRouteReflectorMeshName,
+			},
+		}
+	}
+	rrConfig.Spec = calicoApi.BGPPeerSpec{
+		NodeSelector: "!" + selector,
+		PeerSelector: selector,
+	}
+
+	bgpPeerConfigs = append(bgpPeerConfigs, *rrConfig)
+
+	clientConfigName := fmt.Sprintf(DefaultRouteReflectorClientName, 1)
+
+	clientConfig := findBGPPeer(clientConfigName, existingPeers)
+	if clientConfig == nil {
+		clientConfig = &calicoApi.BGPPeer{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       calicoApi.KindBGPPeer,
+				APIVersion: calicoApi.GroupVersionCurrent,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clientConfigName,
+			},
+		}
+	}
+	clientConfig.Spec = calicoApi.BGPPeerSpec{
+		NodeSelector: selector,
+		PeerSelector: selector,
+	}
+
+	bgpPeerConfigs = append(bgpPeerConfigs, *clientConfig)
+
+	return bgpPeerConfigs
 }
 
 func (t *SingleTopology) AddRRSuccess(string) {

@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	routeReflectorClusterIDAnnotation = "projectcalico.org/RouteReflectorClusterID"
+	RouteReflectorClusterIDAnnotation = "projectcalico.org/RouteReflectorClusterID"
 )
 
 type KddDataStore struct {
@@ -31,7 +31,7 @@ type KddDataStore struct {
 func (d *KddDataStore) RemoveRRStatus(node *corev1.Node) error {
 	nodeLabelKey, _ := d.topology.GetNodeLabel(string(node.GetUID()))
 	delete(node.Labels, nodeLabelKey)
-	delete(node.Annotations, routeReflectorClusterIDAnnotation)
+	delete(node.Annotations, RouteReflectorClusterIDAnnotation)
 
 	return nil
 }
@@ -41,7 +41,7 @@ func (d *KddDataStore) AddRRStatus(node *corev1.Node) error {
 	node.Labels[labelKey] = labelValue
 
 	clusterID := d.topology.GetClusterID(string(node.GetUID()))
-	node.Annotations[routeReflectorClusterIDAnnotation] = clusterID
+	node.Annotations[RouteReflectorClusterIDAnnotation] = clusterID
 
 	return nil
 }

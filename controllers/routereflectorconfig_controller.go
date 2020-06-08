@@ -20,8 +20,10 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"github.com/mhmxs/calico-route-reflector-operator/bgppeer"
 	"github.com/mhmxs/calico-route-reflector-operator/datastores"
 	"github.com/mhmxs/calico-route-reflector-operator/topologies"
+	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/prometheus/common/log"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -48,6 +50,10 @@ var (
 	nodeRevertError       = ctrl.Result{}
 	nodeRevertUpdateError = ctrl.Result{}
 	nodeUpdateError       = ctrl.Result{}
+	rrListError           = ctrl.Result{}
+	rrPeerListError       = ctrl.Result{}
+	bgpPeerError          = ctrl.Result{}
+	bgpPeerRemoveError    = ctrl.Result{}
 )
 
 // RouteReflectorConfigReconciler reconciles a RouteReflectorConfig object
@@ -56,8 +62,10 @@ type RouteReflectorConfigReconciler struct {
 	CalicoClient calicoClient.Interface
 	Log          logr.Logger
 	Scheme       *runtime.Scheme
+	NodeLabelKey string
 	Topology     topologies.Topology
 	Datastore    datastores.Datastore
+	BGPPeer      bgppeer.BGPPeer
 }
 
 type reconcileImplClient interface {
@@ -69,22 +77,22 @@ type reconcileImplClient interface {
 // +kubebuilder:rbac:groups=route-reflector.calico-route-reflector-operator.mhmxs.github.com,resources=routereflectorconfigs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=route-reflector.calico-route-reflector-operator.mhmxs.github.com,resources=routereflectorconfigs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;update;watch
-// +kubebuilder:rbac:groups="projectcalico.org/v3",resources=nodes,verbs=list;update
+// +kubebuilder:rbac:groups="crd.projectcalico.org",resources=bgppeers,verbs=get;list;create;update
 
 func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("routereflectorconfig", req.Name)
 
-	targetNode := corev1.Node{}
-	if err := r.Client.Get(context.Background(), req.NamespacedName, &targetNode); err != nil && !errors.IsNotFound(err) {
+	currentNode := corev1.Node{}
+	if err := r.Client.Get(context.Background(), req.NamespacedName, &currentNode); err != nil && !errors.IsNotFound(err) {
 		log.Errorf("Unable to fetch node %s because of %s", req.Name, err.Error())
 		return nodeGetError, err
 	} else if errors.IsNotFound(err) {
 		log.Debugf("Node not found %s", req.Name)
 		return nodeNotFound, nil
-	} else if err == nil && r.Topology.IsLabeled(string(targetNode.GetUID()), targetNode.GetLabels()) && targetNode.GetDeletionTimestamp() != nil ||
-		!isNodeReady(&targetNode) || !isNodeSchedulable(&targetNode) {
+	} else if err == nil && r.Topology.IsRouteReflector(string(currentNode.GetUID()), currentNode.GetLabels()) && currentNode.GetDeletionTimestamp() != nil ||
+		!isNodeReady(&currentNode) || !isNodeSchedulable(&currentNode) {
 		// Node is deleted right now or has some issues, better to remove form RRs
-		if err := r.removeRRStatus(req, &targetNode); err != nil {
+		if err := r.removeRRStatus(req, &currentNode); err != nil {
 			log.Errorf("Unable to cleanup label on %s because of %s", req.Name, err.Error())
 			return nodeCleanupError, err
 		}
@@ -93,7 +101,7 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		return nodeCleaned, nil
 	}
 
-	listOptions := r.Topology.NewNodeListOptions(targetNode.GetLabels())
+	listOptions := r.Topology.NewNodeListOptions(currentNode.GetLabels())
 	log.Debugf("List options are %v", listOptions)
 	nodeList := corev1.NodeList{}
 	if err := r.Client.List(context.Background(), &nodeList, &listOptions); err != nil {
@@ -153,6 +161,50 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		log.Infof("Actual number %d is different than expected %d", actualReadyNumber, expectedNumber)
 	}
 
+	rrLables := client.HasLabels{r.NodeLabelKey}
+	rrListOptions := client.ListOptions{}
+	rrLables.ApplyToList(&rrListOptions)
+	log.Debugf("RR list options are %v", rrListOptions)
+
+	rrList := corev1.NodeList{}
+	if err := r.Client.List(context.Background(), &rrList, &rrListOptions); err != nil {
+		log.Errorf("Unable to list route reflectors because of %s", err.Error())
+		return rrListError, err
+	}
+
+	log.Debugf("Route reflectors are: %v", rrList.Items)
+
+	existingBGPPeers, err := r.BGPPeer.ListBGPPeers()
+	if err != nil {
+		log.Errorf("Unable to list BGP peers because of %s", err.Error())
+		return rrPeerListError, err
+	}
+
+	log.Debugf("Existing BGPeers are: %v", existingBGPPeers.Items)
+
+	currentBGPPeers := r.Topology.GenerateBGPPeers(rrList.Items, nodes, existingBGPPeers)
+
+	log.Debugf("Current BGPeers are: %v", currentBGPPeers)
+
+	for _, bp := range currentBGPPeers {
+		if err := r.BGPPeer.SaveBGPPeer(&bp); err != nil {
+			log.Errorf("Unable to save BGPPeer because of %s", err.Error())
+			return bgpPeerError, err
+		}
+	}
+
+	for _, p := range existingBGPPeers.Items {
+		if !findBGPPeer(p.GetName(), currentBGPPeers) {
+			log.Debugf("Removing BGPPeer: %s", p.GetName())
+			if err := r.BGPPeer.RemoveBGPPeer(&p); err != nil {
+				log.Errorf("Unable to remove BGPPeer because of %s", err.Error())
+				return bgpPeerRemoveError, err
+			}
+		}
+	}
+
+	// TODO check do logs make sense to debug
+
 	return finished, nil
 }
 
@@ -178,7 +230,7 @@ func (r *RouteReflectorConfigReconciler) removeRRStatus(req ctrl.Request, node *
 }
 
 func (r *RouteReflectorConfigReconciler) updateRRStatus(node *corev1.Node, diff int) (bool, error) {
-	if labeled := r.Topology.IsLabeled(string(node.GetUID()), node.GetLabels()); labeled && diff < 0 {
+	if labeled := r.Topology.IsRouteReflector(string(node.GetUID()), node.GetLabels()); labeled && diff < 0 {
 		return true, r.Datastore.RemoveRRStatus(node)
 	} else if labeled || diff <= 0 {
 		return false, nil
@@ -213,7 +265,7 @@ func (r *RouteReflectorConfigReconciler) collectNodeInfo(allNodes []corev1.Node)
 		filtered[&n] = isReady && isSchedulable
 		if isReady && isSchedulable {
 			readyNodes++
-			if r.Topology.IsLabeled(string(n.GetUID()), n.GetLabels()) {
+			if r.Topology.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
 				actualReadyNumber++
 			}
 		}
@@ -237,6 +289,16 @@ func isNodeSchedulable(node *corev1.Node) bool {
 		return false
 	}
 	return true
+}
+
+func findBGPPeer(name string, peers []calicoApi.BGPPeer) bool {
+	for _, p := range peers {
+		if p.GetName() == name {
+			return true
+		}
+	}
+
+	return false
 }
 
 type eventFilter struct{}

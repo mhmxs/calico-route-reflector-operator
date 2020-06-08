@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	routereflectorv1 "github.com/mhmxs/calico-route-reflector-operator/api/v1"
+	"github.com/mhmxs/calico-route-reflector-operator/bgppeer"
 	"github.com/mhmxs/calico-route-reflector-operator/controllers"
 	"github.com/mhmxs/calico-route-reflector-operator/datastores"
 	"github.com/mhmxs/calico-route-reflector-operator/topologies"
@@ -65,6 +66,23 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = routereflectorv1.AddToScheme(scheme)
+
+	// calicoGroupVersion := &schema.GroupVersion{
+	// 	Group:   "crd.projectcalico.org",
+	// 	Version: "v1",
+	// }
+
+	// schemeBuilder := runtime.NewSchemeBuilder(
+	// 	func(scheme *runtime.Scheme) error {
+	// 		scheme.AddKnownTypes(
+	// 			*calicoGroupVersion,
+	// 			&calicoApi.BGPPeer{},
+	// 			&calicoApi.BGPPeerList{},
+	// 		)
+	// 		return nil
+	// 	})
+
+	// _ = schemeBuilder.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -109,6 +127,7 @@ func main() {
 		Ration:         ratio,
 	}
 	var topology topologies.Topology
+	// TODO Validation on topology
 	if t, ok := os.LookupEnv("ROUTE_REFLECTOR_TOPOLOGY"); ok && t == "multi" {
 		topology = topologies.NewMultiTopology(topologyConfig)
 	} else {
@@ -132,11 +151,15 @@ func main() {
 	}
 
 	if err = (&controllers.RouteReflectorConfigReconciler{
-		Client:    mgr.GetClient(),
-		Log:       ctrl.Log.WithName("controllers").WithName("RouteReflectorConfig"),
-		Scheme:    mgr.GetScheme(),
-		Topology:  topology,
-		Datastore: datastore,
+		Client:       mgr.GetClient(),
+		Log:          ctrl.Log.WithName("controllers").WithName("RouteReflectorConfig"),
+		Scheme:       mgr.GetScheme(),
+		NodeLabelKey: nodeLabelKey,
+		Topology:     topology,
+		Datastore:    datastore,
+		BGPPeer: bgppeer.BGPPeer{
+			CalicoClient: calicoClient,
+		},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RouteReflectorConfig")
 		panic(err)
