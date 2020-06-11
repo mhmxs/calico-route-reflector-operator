@@ -32,8 +32,6 @@ spec:
             value: "incluster"
           - name: K8S_API_ENDPOINT
             value: "https://kubernetes.default"
-          - name: ROUTE_REFLECTOR_TOPOLOGY
-            value: "multi"
         image: controller:latest
         imagePullPolicy: Always
         name: manager
