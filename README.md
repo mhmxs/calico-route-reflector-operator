@@ -25,7 +25,7 @@ This Kubernetes operator can monitor and scale Calico route refloctor pods based
 
 You can edit or add those environment variables at the [manager](config/manager/manager.yaml) manifest. You can add Calico client config related variables, Calico lib will parse it in the background.
 
-During the `api/core/v1/Node` reconcile phases it calculates the right number of route refloctor nodes per zone. It supports linear scaling only and it multiplies the number of nodes with the given ratio and than updates the route reflector replicas to the expected number.
+During the `api/core/v1/Node` reconcile phases it calculates the right number of route refloctor nodes per zone. It supports linear scaling only and it multiplies the number of nodes with the given ratio and than updates the route reflector replicas to the expected number. After all the nodes are labeled correctly it regenerates BGP peer topology for the cluster.
 
 ## Usage
 
@@ -36,7 +36,7 @@ After first reconcile phase is done don not forget to disable the [node-to-node 
 Use latest release:
 ```
 kustomize build config/crd | kubectl apply -f -
-$(cd config/manager && kustomize edit set image controller=quay.io/mhmxs/calico-route-reflector-controller:v0.0.1)
+$(cd config/manager && kustomize edit set image controller=quay.io/mhmxs/calico-route-reflector-controller:v0.0.2)
 kustomize build config/default | kubectl apply -f -
 ```
 
