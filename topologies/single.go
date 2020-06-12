@@ -76,9 +76,8 @@ func (t *SingleTopology) CalculateExpectedNumber(readyNodes int) int {
 func (t *SingleTopology) GenerateBGPPeers(_ []corev1.Node, _ map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList) []calicoApi.BGPPeer {
 	bgpPeerConfigs := []calicoApi.BGPPeer{}
 
-	selector := fmt.Sprintf("has(%s)", t.NodeLabelKey)
-
-	rrConfig := findBGPPeer(DefaultRouteReflectorMeshName, existingPeers)
+	// TODO eliminate code duplication
+	rrConfig := findBGPPeer(existingPeers.Items, DefaultRouteReflectorMeshName)
 	if rrConfig == nil {
 		rrConfig = &calicoApi.BGPPeer{
 			TypeMeta: metav1.TypeMeta{
@@ -90,8 +89,9 @@ func (t *SingleTopology) GenerateBGPPeers(_ []corev1.Node, _ map[*corev1.Node]bo
 			},
 		}
 	}
+	selector := fmt.Sprintf("has(%s)", t.NodeLabelKey)
 	rrConfig.Spec = calicoApi.BGPPeerSpec{
-		NodeSelector: "!" + selector,
+		NodeSelector: selector,
 		PeerSelector: selector,
 	}
 
@@ -99,7 +99,7 @@ func (t *SingleTopology) GenerateBGPPeers(_ []corev1.Node, _ map[*corev1.Node]bo
 
 	clientConfigName := fmt.Sprintf(DefaultRouteReflectorClientName, 1)
 
-	clientConfig := findBGPPeer(clientConfigName, existingPeers)
+	clientConfig := findBGPPeer(existingPeers.Items, clientConfigName)
 	if clientConfig == nil {
 		clientConfig = &calicoApi.BGPPeer{
 			TypeMeta: metav1.TypeMeta{

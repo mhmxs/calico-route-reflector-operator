@@ -126,6 +126,8 @@ func main() {
 		Max:            max,
 		Ration:         ratio,
 	}
+	log.Infof("Topology config: %v", topologyConfig)
+
 	var topology topologies.Topology
 	// TODO Validation on topology
 	if t, ok := os.LookupEnv("ROUTE_REFLECTOR_TOPOLOGY"); ok && t == "multi" {
@@ -173,6 +175,7 @@ func main() {
 	}
 }
 
+// TODO more sophisticated env parse and validation or use CRD
 func parseEnv() (int, int, string, float64, string, string, string) {
 	var err error
 	clusterID := defaultClusterID

@@ -49,8 +49,8 @@ type Config struct {
 	Ration         float64
 }
 
-func findBGPPeer(name string, peers *calicoApi.BGPPeerList) *calicoApi.BGPPeer {
-	for _, p := range peers.Items {
+func findBGPPeer(peers []calicoApi.BGPPeer, name string) *calicoApi.BGPPeer {
+	for _, p := range peers {
 		if p.GetName() == name {
 			return &p
 		}

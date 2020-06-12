@@ -31,6 +31,8 @@ During the `api/core/v1/Node` reconcile phases it calculates the right number of
 
 This is a standard Kubebuilder opertor so building and deploying process is similar as a [stock Kubebuilder project](https://book.kubebuilder.io/cronjob-tutorial/running.html).
 
+After first reconcile phase is done don not forget to disable the [node-to-node mesh](https://docs.projectcalico.org/getting-started/kubernetes/hardway/configure-bgp-peering)!
+
 Use latest release:
 ```
 kustomize build config/crd | kubectl apply -f -

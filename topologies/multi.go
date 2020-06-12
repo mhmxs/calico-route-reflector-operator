@@ -17,7 +17,7 @@ package topologies
 
 import (
 	"fmt"
-	"math/rand"
+	"math"
 	"strconv"
 
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -34,8 +34,8 @@ type MultiTopology struct {
 }
 
 func (t *MultiTopology) IsRouteReflector(nodeID string, labels map[string]string) bool {
-	label, ok := labels[t.NodeLabelKey]
-	return ok && label == t.getNodeLabel(nodeID)
+	_, ok := labels[t.NodeLabelKey]
+	return ok
 }
 
 func (t *MultiTopology) GetClusterID(nodeID string) string {
@@ -57,42 +57,39 @@ func (t *MultiTopology) CalculateExpectedNumber(readyNodes int) int {
 func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList) []calicoApi.BGPPeer {
 	bgpPeerConfigs := []calicoApi.BGPPeer{}
 
+	rrConfig := findBGPPeer(existingPeers.Items, DefaultRouteReflectorMeshName)
+	if rrConfig == nil {
+		rrConfig = &calicoApi.BGPPeer{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       calicoApi.KindBGPPeer,
+				APIVersion: calicoApi.GroupVersionCurrent,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: DefaultRouteReflectorMeshName,
+			},
+		}
+	}
+	selector := fmt.Sprintf("has(%s)", t.NodeLabelKey)
+	rrConfig.Spec = calicoApi.BGPPeerSpec{
+		NodeSelector: selector,
+		PeerSelector: selector,
+	}
+
+	bgpPeerConfigs = append(bgpPeerConfigs, *rrConfig)
+
+	// TODO this could cause rebalancing very ofthen so has performance issues
+	rrIndex := 0
 	for n, isReady := range nodes {
-		if !isReady {
+		if !isReady || t.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
 			continue
 		}
 
-		if t.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
-			selector := fmt.Sprintf("has(%s)", t.NodeLabelKey)
-			rrConfig := findBGPPeer(DefaultRouteReflectorMeshName, existingPeers)
-			if rrConfig == nil {
-				rrConfig = &calicoApi.BGPPeer{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       calicoApi.KindBGPPeer,
-						APIVersion: calicoApi.GroupVersionCurrent,
-					},
-					ObjectMeta: metav1.ObjectMeta{
-						Name: DefaultRouteReflectorMeshName,
-					},
-				}
-			}
-			rrConfig.Spec = calicoApi.BGPPeerSpec{
-				NodeSelector: "!" + selector,
-				PeerSelector: selector,
-			}
+		for i := 1; i <= int(math.Min(float64(len(routeReflectors)), 3)); i++ {
+			rr := routeReflectors[rrIndex]
+			rrID := getRouteReflectorID(string(rr.GetUID()))
+			name := fmt.Sprintf(DefaultRouteReflectorClientName+"-%s", rrID, n.GetUID())
 
-			bgpPeerConfigs = append(bgpPeerConfigs, *rrConfig)
-
-			continue
-		}
-
-		// TODO Do it in a more sophisticaged way
-		for i := 1; i <= 3; i++ {
-			rrID := rand.Intn(len(routeReflectors))
-			name := fmt.Sprintf(DefaultRouteReflectorClientName, rrID)
-			rr := getRouteReflectorID(string(routeReflectors[rrID].GetUID()))
-
-			clientConfig := findBGPPeer(DefaultRouteReflectorMeshName, existingPeers)
+			clientConfig := findBGPPeer(existingPeers.Items, name)
 			if clientConfig == nil {
 				clientConfig = &calicoApi.BGPPeer{
 					TypeMeta: metav1.TypeMeta{
@@ -105,10 +102,17 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 				}
 			}
 			clientConfig.Spec = calicoApi.BGPPeerSpec{
-				PeerSelector: fmt.Sprintf("%s=='%d'", t.NodeLabelKey, rr),
+				// TODO make configurable
+				NodeSelector: fmt.Sprintf("kubernetes.io/hostname=='%s'", n.GetLabels()["kubernetes.io/hostname"]),
+				PeerSelector: fmt.Sprintf("%s=='%d'", t.NodeLabelKey, rrID),
 			}
 
 			bgpPeerConfigs = append(bgpPeerConfigs, *clientConfig)
+
+			rrIndex++
+			if rrIndex == len(routeReflectors) {
+				rrIndex = 0
+			}
 		}
 	}
 

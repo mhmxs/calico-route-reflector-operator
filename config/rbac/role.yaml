@@ -21,6 +21,7 @@ rules:
   - bgppeers
   verbs:
   - create
+  - delete
   - get
   - list
   - update

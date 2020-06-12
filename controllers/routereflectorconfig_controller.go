@@ -77,7 +77,7 @@ type reconcileImplClient interface {
 // +kubebuilder:rbac:groups=route-reflector.calico-route-reflector-operator.mhmxs.github.com,resources=routereflectorconfigs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=route-reflector.calico-route-reflector-operator.mhmxs.github.com,resources=routereflectorconfigs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;update;watch
-// +kubebuilder:rbac:groups="crd.projectcalico.org",resources=bgppeers,verbs=get;list;create;update
+// +kubebuilder:rbac:groups="crd.projectcalico.org",resources=bgppeers,verbs=get;list;create;update;delete
 
 func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("routereflectorconfig", req.Name)
@@ -108,13 +108,14 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		log.Errorf("Unable to list nodes because of %s", err.Error())
 		return nodeListError, err
 	}
+	log.Debugf("Total number of nodes %d", len(nodeList.Items))
 
-	readyNodes, actualReadyNumber, nodes := r.collectNodeInfo(nodeList.Items)
+	readyNodes, actualRRNumber, nodes := r.collectNodeInfo(nodeList.Items)
 	log.Infof("Nodes are ready %d", readyNodes)
-	log.Infof("Actual number of healthy route reflector nodes are %d", actualReadyNumber)
+	log.Infof("Actual number of healthy route reflector nodes are %d", actualRRNumber)
 
-	expectedNumber := r.Topology.CalculateExpectedNumber(readyNodes)
-	log.Infof("Expected number of route reflector nodes are %d", expectedNumber)
+	expectedRRNumber := r.Topology.CalculateExpectedNumber(readyNodes)
+	log.Infof("Expected number of route reflector nodes are %d", expectedRRNumber)
 
 	for n, isReady := range nodes {
 		if status, ok := routeReflectorsUnderOperation[n.GetUID()]; ok {
@@ -141,26 +142,27 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 			return nodeReverted, nil
 		}
 
-		if !isReady || expectedNumber == actualReadyNumber {
+		if !isReady || expectedRRNumber == actualRRNumber {
 			continue
 		}
 
-		if diff := expectedNumber - actualReadyNumber; diff != 0 {
+		if diff := expectedRRNumber - actualRRNumber; diff != 0 {
 			if updated, err := r.updateRRStatus(n, diff); err != nil {
 				log.Errorf("Unable to update node %s because of %s", n.GetName(), err.Error())
 				return nodeUpdateError, err
 			} else if updated && diff > 0 {
-				actualReadyNumber++
+				actualRRNumber++
 			} else if updated && diff < 0 {
-				actualReadyNumber--
+				actualRRNumber--
 			}
 		}
 	}
 
-	if expectedNumber != actualReadyNumber {
-		log.Infof("Actual number %d is different than expected %d", actualReadyNumber, expectedNumber)
+	if expectedRRNumber != actualRRNumber {
+		log.Errorf("Actual number %d is different than expected %d", actualRRNumber, expectedRRNumber)
 	}
 
+	// TODO This has several performance issue, need to fix them
 	rrLables := client.HasLabels{r.NodeLabelKey}
 	rrListOptions := client.ListOptions{}
 	rrLables.ApplyToList(&rrListOptions)
@@ -171,7 +173,6 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		log.Errorf("Unable to list route reflectors because of %s", err.Error())
 		return rrListError, err
 	}
-
 	log.Debugf("Route reflectors are: %v", rrList.Items)
 
 	existingBGPPeers, err := r.BGPPeer.ListBGPPeers()
@@ -183,7 +184,6 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 	log.Debugf("Existing BGPeers are: %v", existingBGPPeers.Items)
 
 	currentBGPPeers := r.Topology.GenerateBGPPeers(rrList.Items, nodes, existingBGPPeers)
-
 	log.Debugf("Current BGPeers are: %v", currentBGPPeers)
 
 	for _, bp := range currentBGPPeers {
@@ -194,7 +194,7 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 	}
 
 	for _, p := range existingBGPPeers.Items {
-		if !findBGPPeer(p.GetName(), currentBGPPeers) {
+		if !findBGPPeer(currentBGPPeers, p.GetName()) {
 			log.Debugf("Removing BGPPeer: %s", p.GetName())
 			if err := r.BGPPeer.RemoveBGPPeer(&p); err != nil {
 				log.Errorf("Unable to remove BGPPeer because of %s", err.Error())
@@ -259,10 +259,10 @@ func (r *RouteReflectorConfigReconciler) updateRRStatus(node *corev1.Node, diff 
 func (r *RouteReflectorConfigReconciler) collectNodeInfo(allNodes []corev1.Node) (readyNodes int, actualReadyNumber int, filtered map[*corev1.Node]bool) {
 	filtered = map[*corev1.Node]bool{}
 
-	for _, n := range allNodes {
+	for i, n := range allNodes {
 		isReady := isNodeReady(&n)
 		isSchedulable := isNodeSchedulable(&n)
-		filtered[&n] = isReady && isSchedulable
+		filtered[&allNodes[i]] = isReady && isSchedulable
 		if isReady && isSchedulable {
 			readyNodes++
 			if r.Topology.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
@@ -291,7 +291,7 @@ func isNodeSchedulable(node *corev1.Node) bool {
 	return true
 }
 
-func findBGPPeer(name string, peers []calicoApi.BGPPeer) bool {
+func findBGPPeer(peers []calicoApi.BGPPeer, name string) bool {
 	for _, p := range peers {
 		if p.GetName() == name {
 			return true
