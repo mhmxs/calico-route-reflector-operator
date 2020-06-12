@@ -49,6 +49,12 @@ kustomize build config/default | kubectl apply -f -
 Build your own image:
 `IMG_REPO=[IMG_REPO] IMG_NAME=[IMG_NAME] IMG_VERSION=[IMG_VERSION] make test docker-push install deploy`
 
+## Limitations
+
+ * Multi cluster topology doesn't select route reflectors from multiple zones, so on case of full zone outages you have a chance some network outage if a node all 3 connections was established toward of that zone.
+ * Multi cluster topology rebalances the whole cluster on case of nodes are added. If you are unlicky it could drop all 3 route reflector sessions which chause 1-2 sec network outage.
+ 
+
 ## Roadmap
 
  * Etcd data store support (You have to add Etcd related env vars into [manager](config/manager/manager.yaml) manually)
