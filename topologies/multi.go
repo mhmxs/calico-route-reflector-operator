@@ -84,6 +84,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			continue
 		}
 
+		// TODO Would be better to create RR groups [1,2,3], [1,2,4], ... to decrease number of BGP peers
 		for i := 1; i <= int(math.Min(float64(len(routeReflectors)), 3)); i++ {
 			rr := routeReflectors[rrIndex]
 			rrID := getRouteReflectorID(string(rr.GetUID()))

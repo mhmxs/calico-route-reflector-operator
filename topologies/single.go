@@ -112,7 +112,7 @@ func (t *SingleTopology) GenerateBGPPeers(_ []corev1.Node, _ map[*corev1.Node]bo
 		}
 	}
 	clientConfig.Spec = calicoApi.BGPPeerSpec{
-		NodeSelector: selector,
+		NodeSelector: "!" + selector,
 		PeerSelector: selector,
 	}
 
