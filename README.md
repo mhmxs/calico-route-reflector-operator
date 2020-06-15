@@ -10,7 +10,6 @@
 
  * Kubernetes cluster up and running
  * Calico network on Kubernetes data store a.k.a. `KDD`.
- * Configured Calico `BGPPeer`s one for route reflector mesh and an other for clients. [More info](https://docs.projectcalico.org/getting-started/kubernetes/hardway/configure-bgp-peering)
 
 This Kubernetes operator can monitor and scale Calico route refloctor pods based on node number per zone. The operator owns a few environment variables:
  * `DATASTORE_TYPE` Calico datastore [`incluster`, `kubernetes`, `etcd`], default `incluster`
