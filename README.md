@@ -35,7 +35,7 @@ After first reconcile phase is done don not forget to disable the [node-to-node 
 Use latest release:
 ```
 kustomize build config/crd | kubectl apply -f -
-$(cd config/manager && kustomize edit set image controller=quay.io/mhmxs/calico-route-reflector-controller:v0.0.2)
+$(cd config/manager && kustomize edit set image controller=quay.io/mhmxs/calico-route-reflector-controller:v0.0.3)
 kustomize build config/default | kubectl apply -f -
 ```
 
