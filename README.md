@@ -51,9 +51,10 @@ Build your own image:
 
 ## Limitations
 
+ * In the current implementation each reconcile loop fetches all nodes and all BGP peer configurations which could take too much time in large clusters.
  * Multi cluster topology doesn't select route reflectors from multiple zones, so on case of full zone outages you have a chance some network outage if a node all 3 connections was established toward of that zone.
  * Multi cluster topology rebalances the whole cluster on case of nodes are added. If you are unlicky it could drop all 3 route reflector sessions which chause 1-2 sec network outage.
- 
+ * Multi cluster topology generates 3 BGP peers per node, which can grow in large cluster. Would be better to create BGP peer configuration for eahc route reflector combination to decrease number of BGP peer configs. For example: `[1,2,3]`, `[1,2,4]`, `[2,3,4]`, `[1,3,4]`
 
 ## Roadmap
 
