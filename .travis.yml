@@ -14,8 +14,14 @@ go:
 services: docker
 
 before_install:
-  - curl -L https://go.kubebuilder.io/dl/2.3.1/linux/amd64 | tar -xz -C $HOME
+  - curl -sL https://go.kubebuilder.io/dl/2.3.1/linux/amd64 | tar -xz -C $HOME
   - sudo cp -rs $HOME/kubebuilder_2.3.1_linux_amd64 /usr/local/kubebuilder
+  - curl -sLf https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv3.6.1/kustomize_v3.6.1_linux_amd64.tar.gz | tar xf -C $HOME
+  - chmod +x /usr/local/bin/kustomize
+  - sudo cp -rs $HOME/kustomize /usr/local/bin
 
 script:
   - make test docker-build
+  - kustomize build config/crd
+  - $(cd config/default && kustomize edit add base ../manager)
+  - kustomize build config/default
