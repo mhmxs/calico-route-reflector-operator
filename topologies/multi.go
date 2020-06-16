@@ -79,7 +79,6 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 
 	peers := int(math.Min(float64(len(routeReflectors)), 3))
 
-	// TODO this could cause rebalancing very ofthen so has performance issues
 	rrIndex := -1
 	rrIndexPerZone := map[string]int{}
 
@@ -133,7 +132,6 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			routeReflectorsForNode = append(routeReflectorsForNode, rr)
 		}
 
-		// TODO Would be better to create RR groups [1,2,3], [1,2,4], ... to decrease number of BGP peers
 		for _, rr := range routeReflectorsForNode {
 			rrID := getRouteReflectorID(string(rr.GetUID()))
 			name := fmt.Sprintf(DefaultRouteReflectorClientName+"-%s", rrID, n.GetUID())

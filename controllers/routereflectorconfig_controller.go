@@ -162,7 +162,6 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		log.Errorf("Actual number %d is different than expected %d", actualRRNumber, expectedRRNumber)
 	}
 
-	// TODO This has several performance issue, need to fix them
 	rrLables := client.HasLabels{r.NodeLabelKey}
 	rrListOptions := client.ListOptions{}
 	rrLables.ApplyToList(&rrListOptions)

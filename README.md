@@ -9,7 +9,6 @@
 ## Prerequisites
 
  * Kubernetes cluster up and running
- * Calico network on Kubernetes data store a.k.a. `KDD`.
 
 This Kubernetes operator can monitor and scale Calico route refloctor pods based on node number per zone. The operator owns a few environment variables:
  * `DATASTORE_TYPE` Calico datastore [`incluster`, `kubernetes`, `etcd`], default `incluster`
@@ -40,8 +39,14 @@ kustomize build config/default | kubectl apply -f -
 ```
 
 Use official latest master image:
+
+Edit Calico client environment variables before deploying operator at; [ETCD](config/manager/etcd/envs.yaml), [KDD](config/manager/kdd/envs.yaml)!
+
 ```
 kustomize build config/crd | kubectl apply -f -
+$(cd config/default && kustomize edit add base ../manager) # for in cluster
+# $(cd config/default && kustomize edit add base ../manager/etcd) # for ETCD
+# $(cd config/default && kustomize edit add base ../manager/kdd) # for KDD
 kustomize build config/default | kubectl apply -f -
 ```
 
@@ -56,7 +61,6 @@ Build your own image:
 
 ## Roadmap
 
- * Etcd data store support (You have to add Etcd related env vars into [manager](config/manager/manager.yaml) manually)
  * Use custom resource instead of environment variables
  * Dedicated or preferred node label
  * Disallow node label
