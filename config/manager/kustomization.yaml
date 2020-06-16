@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: quay.io/mhmxs/calico-route-reflector-controller
-  newTag: dev
+  newTag: latest
