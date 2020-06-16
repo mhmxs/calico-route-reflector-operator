@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          env:
+            - name: DATASTORE_TYPE
+              value: "etcd"
+            - name: ETCD_ENDPOINTS
+              value: ""
+            - name: ETCD_DISCOVERY_SRV
+              value: ""
+            - name: ETCD_USERNAME
+              value: ""
+            - name: ETCD_PASSWORD
+              value: ""
+            - name: ETCD_KEY_FILE
+              value: ""
+            - name: ETCD_CERT_FILE
+              value: ""
+            - name: ETCD_CA_CERT_FILE
+              value: ""

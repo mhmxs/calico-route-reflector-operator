@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          env:
+            - name: DATASTORE_TYPE
+              value: "kubernetes"
+            - name: KUBECONFIG
+              value: ""
+            - name: K8S_API_ENDPOINT
+              value: "https://kubernetes.default"
+            - name: K8S_KEY_FILE
+              value: ""
+            - name: K8S_CERT_FILE
+              value: ""
+            - name: K8S_CA_FILE
+              value: ""
+            - name: K8S_INSECURE_SKIP_TLS_VERIFY
+              value: ""
+            - name: K8S_DISABLE_NODE_POLL
+              value: ""
