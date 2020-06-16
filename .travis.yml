@@ -17,7 +17,7 @@ before_install:
   - curl -sLf https://go.kubebuilder.io/dl/2.3.1/linux/amd64 | tar -xz -C $HOME
   - sudo cp -rs $HOME/kubebuilder_2.3.1_linux_amd64 /usr/local/kubebuilder
   - curl -sLf https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv3.6.1/kustomize_v3.6.1_linux_amd64.tar.gz | tar -xz -C $HOME
-  - chmod +x /usr/local/bin/kustomize
+  - chmod +x $HOME/kustomize
   - sudo cp -rs $HOME/kustomize /usr/local/bin
 
 script:
