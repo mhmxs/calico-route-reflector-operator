@@ -18,7 +18,6 @@ package topologies
 import (
 	"fmt"
 	"math"
-	"math/rand"
 	"strconv"
 
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -82,6 +81,8 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 
 	// TODO this could cause rebalancing very ofthen so has performance issues
 	rrIndex := -1
+	rrIndexPerZone := map[string]int{}
+
 	for n, isReady := range nodes {
 		if !isReady || t.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
 			continue
@@ -96,12 +97,21 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			for i, rr := range routeReflectors {
 				rrZone := rr.GetLabels()[t.Config.ZoneLabel]
 				if nodeZone == rrZone {
+					if _, ok := rrIndexPerZone[nodeZone]; !ok {
+						rrIndexPerZone[nodeZone] = -1
+					}
+
 					rrsSameZone = append(rrsSameZone, routeReflectors[i])
 				}
 			}
 
 			if len(rrsSameZone) > 0 {
-				rr := rrsSameZone[rand.Int31n(int32(len(rrsSameZone)-1))]
+				rrIndexPerZone[nodeZone]++
+				if rrIndexPerZone[nodeZone] == len(rrsSameZone) {
+					rrIndexPerZone[nodeZone] = 0
+				}
+
+				rr := rrsSameZone[rrIndexPerZone[nodeZone]]
 				routeReflectorsForNode = append(routeReflectorsForNode, rr)
 			}
 		}
