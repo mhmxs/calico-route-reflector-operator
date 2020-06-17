@@ -10,9 +10,9 @@ spec:
         - name: manager
           volumeMounts:
           - name: calico-route-reflector-etcd-config
-            mountPath: "/root/etcd"
+            mountPath: "/etc/etcd"
             readOnly: true
       volumes:
       - name: calico-route-reflector-etcd-config
         secret:
-          secretName: calico-route-reflector-etcd-config
+          secretName: etcd-config

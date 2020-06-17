@@ -10,9 +10,9 @@ spec:
         - name: manager
           volumeMounts:
           - name: calico-route-reflector-kdd-config
-            mountPath: "/root/kdd"
+            mountPath: "/etc/kdd"
             readOnly: true
       volumes:
       - name: calico-route-reflector-kdd-config
         secret:
-          secretName: calico-route-reflector-kdd-config
+          secretName: kdd-config
