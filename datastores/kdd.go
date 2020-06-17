@@ -40,7 +40,7 @@ func (d *KddDataStore) AddRRStatus(node *corev1.Node) error {
 	labelKey, labelValue := d.topology.GetNodeLabel(string(node.GetUID()))
 	node.Labels[labelKey] = labelValue
 
-	clusterID := d.topology.GetClusterID(string(node.GetUID()), node.GetCreationTimestamp().Nanosecond())
+	clusterID := d.topology.GetClusterID(string(node.GetUID()), node.GetCreationTimestamp().UnixNano())
 	node.Annotations[RouteReflectorClusterIDAnnotation] = clusterID
 
 	return nil

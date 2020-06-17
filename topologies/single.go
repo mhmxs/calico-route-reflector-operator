@@ -36,7 +36,7 @@ func (t *SingleTopology) IsRouteReflector(_ string, labels map[string]string) bo
 	return ok && label == t.NodeLabelValue
 }
 
-func (t *SingleTopology) GetClusterID(string, int) string {
+func (t *SingleTopology) GetClusterID(string, int64) string {
 	return t.ClusterID
 }
 
