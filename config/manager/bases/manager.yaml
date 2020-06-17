@@ -30,6 +30,8 @@ spec:
         env:
           - name: DATASTORE_TYPE
             value: "incluster"
+          - name: K8S_API_ENDPOINT
+            value: "https://kubernetes.default"
         image: controller:latest
         imagePullPolicy: Always
         name: manager

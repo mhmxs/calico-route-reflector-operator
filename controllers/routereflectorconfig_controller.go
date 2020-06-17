@@ -223,8 +223,6 @@ func (r *RouteReflectorConfigReconciler) removeRRStatus(req ctrl.Request, node *
 
 	delete(routeReflectorsUnderOperation, node.GetUID())
 
-	r.Topology.RemoveRRSuccess(string(node.GetUID()))
-
 	return nil
 }
 
@@ -249,8 +247,6 @@ func (r *RouteReflectorConfigReconciler) updateRRStatus(node *corev1.Node, diff 
 	}
 
 	delete(routeReflectorsUnderOperation, node.GetUID())
-
-	r.Topology.AddRRSuccess(string(node.GetUID()))
 
 	return true, nil
 }

@@ -17,16 +17,14 @@ package topologies
 
 import (
 	"fmt"
+	"hash/fnv"
 	"math"
-	"strconv"
 
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-var routeReflectors = map[string]int{}
 
 type MultiTopology struct {
 	Config
@@ -115,7 +113,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			}
 		}
 
-		for len(routeReflectorsForNode) <= peers {
+		for len(routeReflectorsForNode) < peers {
 			rrIndex++
 			if rrIndex == len(routeReflectors) {
 				rrIndex = 0
@@ -162,37 +160,17 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 	return bgpPeerConfigs
 }
 
-func (t *MultiTopology) AddRRSuccess(nodeID string) {
-	routeReflectors[nodeID] = getRouteReflectorID(nodeID)
-}
-
-func (t *MultiTopology) RemoveRRSuccess(nodeID string) {
-	delete(routeReflectors, nodeID)
-}
-
 func (t *MultiTopology) getNodeLabel(nodeID string) string {
 	if t.NodeLabelValue == "" {
-		return strconv.Itoa(getRouteReflectorID(nodeID))
+		return fmt.Sprintf("%d", getRouteReflectorID(nodeID))
 	}
 	return fmt.Sprintf("%s-%d", t.NodeLabelValue, getRouteReflectorID(nodeID))
 }
 
-// TODO this method has several performance issues, needs to fix later
-func getRouteReflectorID(nodeID string) int {
-	if existing, ok := routeReflectors[nodeID]; ok {
-		return existing
-	}
-
-	existingIDs := map[int]bool{}
-	for _, ID := range routeReflectors {
-		existingIDs[ID] = true
-	}
-
-	for i := 0; ; i++ {
-		if _, ok := existingIDs[i]; !ok {
-			return i
-		}
-	}
+func getRouteReflectorID(nodeID string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(nodeID))
+	return h.Sum32()
 }
 
 func NewMultiTopology(config Config) Topology {

@@ -35,8 +35,6 @@ type Topology interface {
 	NewNodeListOptions(labels map[string]string) client.ListOptions
 	CalculateExpectedNumber(int) int
 	GenerateBGPPeers([]corev1.Node, map[*corev1.Node]bool, *calicoApi.BGPPeerList) []calicoApi.BGPPeer
-	AddRRSuccess(string)
-	RemoveRRSuccess(string)
 }
 
 type Config struct {
