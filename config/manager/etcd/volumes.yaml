@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          volumeMounts:
+          - name: calico-route-reflector-etcd-config
+            mountPath: "/root/etcd"
+            readOnly: true
+      spec:
+        volumes:
+        - name: calico-route-reflector-etcd-config
+          secret:
+            secretName: calico-route-reflector-etcd-config

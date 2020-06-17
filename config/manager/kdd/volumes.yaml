@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          volumeMounts:
+          - name: calico-route-reflector-kdd-config
+            mountPath: "/root/kdd"
+            readOnly: true
+      spec:
+        volumes:
+        - name: calico-route-reflector-kdd-config
+          secret:
+            secretName: calico-route-reflector-kdd-config
