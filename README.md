@@ -40,18 +40,25 @@ kustomize build config/default | kubectl apply -f -
 
 Use official latest master image:
 
-Edit Calico client environment variables before deploying operator at; [ETCD](config/manager/etcd/envs.yaml), [KDD](config/manager/kdd/envs.yaml)!
-
 ```
 kustomize build config/crd | kubectl apply -f -
-$(cd config/default && kustomize edit add base ../manager) # for in cluster
-# $(cd config/default && kustomize edit add base ../manager/etcd) # for ETCD
-# $(cd config/default && kustomize edit add base ../manager/kdd) # for KDD
+$(cd config/default && kustomize edit add base ../manager)
 kustomize build config/default | kubectl apply -f -
 ```
 
 Build your own image:
 `IMG_REPO=[IMG_REPO] IMG_NAME=[IMG_NAME] IMG_VERSION=[IMG_VERSION] make test docker-push install deploy`
+
+Use custom datastore rather then in-cluster KDD:
+
+* Create secret based on your config at; [ETCD](config/manager/etcd/secret.yaml), [KDD](config/manager/kdd/secret.yaml)
+* Edit environment variables based on your secrets at; [ETCD](config/manager/etcd/envs.yaml), [KDD](config/manager/kdd/envs.yaml)
+* Add your datastore settings to bases:
+
+```
+$(cd config/default && kustomize edit add base ../manager/etcd) # for ETCD
+$(cd config/default && kustomize edit add base ../manager/kdd) # for KDD
+```
 
 ## Limitations
 

@@ -1,5 +1,7 @@
 bases:
+- secret.yaml
 - ../bases
 
 patchesStrategicMerge:
 - envs.yaml
+- volumes.yaml

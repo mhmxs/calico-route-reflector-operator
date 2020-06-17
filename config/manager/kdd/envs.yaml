@@ -12,16 +12,25 @@ spec:
             - name: DATASTORE_TYPE
               value: "kubernetes"
             - name: KUBECONFIG
-              value: ""
+              value: "/root/kdd/KUBECONFIG"
             - name: K8S_API_ENDPOINT
-              value: "https://kubernetes.default"
+              valueFrom:
+                secretKeyRef: 
+                  name: calico-route-reflector-kdd-config
+                  key: K8S_API_ENDPOINT
             - name: K8S_KEY_FILE
-              value: ""
+              value: "/root/kdd/K8S_KEY_FILE"
             - name: K8S_CERT_FILE
-              value: ""
+              value: "/root/kdd/K8S_CERT_FILE"
             - name: K8S_CA_FILE
-              value: ""
+              value: "/root/kdd/K8S_CA_FILE"
             - name: K8S_INSECURE_SKIP_TLS_VERIFY
-              value: ""
+              valueFrom:
+                secretKeyRef: 
+                  name: calico-route-reflector-kdd-config
+                  key: K8S_INSECURE_SKIP_TLS_VERIFY
             - name: K8S_DISABLE_NODE_POLL
-              value: ""
+              valueFrom:
+                secretKeyRef: 
+                  name: calico-route-reflector-kdd-config
+                  key: K8S_DISABLE_NODE_POLL
