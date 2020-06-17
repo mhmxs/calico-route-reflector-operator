@@ -10,7 +10,7 @@ spec:
         - name: manager
           env:
             - name: DATASTORE_TYPE
-              value: "etcd"
+              value: "etcdv3"
             - name: ETCD_ENDPOINTS
               valueFrom:
                 secretKeyRef: 

@@ -268,7 +268,7 @@ func newCalicoClient(dataStoreType string) (calicoApiConfig.DatastoreType, calic
 		client, err := calicoClient.NewFromEnv()
 
 		return calicoApiConfig.Kubernetes, client, err
-	case "etcd":
+	case "etcdv3":
 		client, err := calicoClient.NewFromEnv()
 
 		return calicoApiConfig.EtcdV3, client, err

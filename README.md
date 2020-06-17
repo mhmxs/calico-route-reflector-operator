@@ -11,7 +11,7 @@
  * Kubernetes cluster up and running
 
 This Kubernetes operator can monitor and scale Calico route refloctor pods based on node number per zone. The operator owns a few environment variables:
- * `DATASTORE_TYPE` Calico datastore [`incluster`, `kubernetes`, `etcd`], default `incluster`
+ * `DATASTORE_TYPE` Calico datastore [`incluster`, `kubernetes`, `etcdv3`], default `incluster`
  * `K8S_API_ENDPOINT` Kubernetes API endpoint, default `https://kubernetes.default`
  * `ROUTE_REFLECTOR_CLUSTER_ID` Route reflector cluster ID, default `224.0.0.%d`
  * `ROUTE_REFLECTOR_MIN` Minimum number of route reflector pods per zone, default `3`
