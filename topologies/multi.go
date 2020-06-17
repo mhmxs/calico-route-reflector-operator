@@ -40,7 +40,7 @@ func (t *MultiTopology) IsRouteReflector(nodeID string, labels map[string]string
 
 func (t *MultiTopology) GetClusterID(nodeID string, seed int) string {
 	count := strings.Count(t.ClusterID, "%d")
-	parts := make([]interface{}, count)
+	parts := make([]interface{}, 0)
 
 	rand1 := rand.New(rand.NewSource(int64(getRouteReflectorID(nodeID))))
 	parts = append(parts, rand1.Int31n(254))
