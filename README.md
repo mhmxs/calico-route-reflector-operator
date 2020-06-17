@@ -31,7 +31,8 @@ This is a standard Kubebuilder opertor so building and deploying process is simi
 
 After first reconcile phase is done don not forget to disable the [node-to-node mesh](https://docs.projectcalico.org/getting-started/kubernetes/hardway/configure-bgp-peering)!
 
-Use latest release:
+### Use latest release:
+
 ```
 kustomize build config/crd | kubectl apply -f -
 $(cd config/default && kustomize edit add base ../manager)
@@ -39,7 +40,7 @@ $(cd config/manager && kustomize edit set image controller=quay.io/mhmxs/calico-
 kustomize build config/default | kubectl apply -f -
 ```
 
-Use official latest master image:
+### Use official latest master image:
 
 ```
 kustomize build config/crd | kubectl apply -f -
@@ -47,10 +48,11 @@ $(cd config/default && kustomize edit add base ../manager)
 kustomize build config/default | kubectl apply -f -
 ```
 
-Build your own image:
+### Build your own image:
+
 `IMG_REPO=[IMG_REPO] IMG_NAME=[IMG_NAME] IMG_VERSION=[IMG_VERSION] make test docker-push install deploy`
 
-Use custom datastore rather then in-cluster KDD:
+### Use custom datastore rather then in-cluster KDD:
 
 * Create secret based on your config at; [ETCD](config/manager/etcd/secret.yaml), [KDD](config/manager/kdd/secret.yaml)
 * Edit environment variables based on your secrets at; [ETCD](config/manager/etcd/envs.yaml), [KDD](config/manager/kdd/envs.yaml)
