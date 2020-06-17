@@ -48,10 +48,6 @@ $(cd config/default && kustomize edit add base ../manager)
 kustomize build config/default | kubectl apply -f -
 ```
 
-### Build your own image:
-
-`IMG_REPO=[IMG_REPO] IMG_NAME=[IMG_NAME] IMG_VERSION=[IMG_VERSION] make test docker-push install deploy`
-
 ### Use custom datastore rather then in-cluster KDD:
 
 * Create secret based on your config at; [ETCD](config/manager/etcd/secret.yaml), [KDD](config/manager/kdd/secret.yaml)
@@ -63,6 +59,10 @@ kustomize build config/default | kubectl apply -f -
 $(cd config/default && kustomize edit add base ../manager/etcd) # for ETCD
 $(cd config/default && kustomize edit add base ../manager/kdd) # for KDD
 ```
+
+### Build your own image:
+
+`IMG_REPO=[IMG_REPO] IMG_NAME=[IMG_NAME] IMG_VERSION=[IMG_VERSION] make test docker-push install deploy`
 
 ## Limitations
 
