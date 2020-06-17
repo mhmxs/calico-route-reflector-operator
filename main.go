@@ -44,7 +44,7 @@ import (
 )
 
 const (
-	defaultClusterID              = "224.0.0.%d"
+	defaultClusterID              = "224.0.0.0"
 	defaultRouteReflectorMin      = 3
 	defaultRouteReflectorMax      = 10
 	defaultRouteReflectorRatio    = 0.005

@@ -30,7 +30,7 @@ const (
 
 type Topology interface {
 	IsRouteReflector(string, map[string]string) bool
-	GetClusterID(string) string
+	GetClusterID(string, int) string
 	GetNodeLabel(string) (string, string)
 	NewNodeListOptions(labels map[string]string) client.ListOptions
 	CalculateExpectedNumber(int) int

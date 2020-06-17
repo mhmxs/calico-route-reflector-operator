@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math"
+	"math/rand"
+	"strings"
 
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	corev1 "k8s.io/api/core/v1"
@@ -36,8 +38,19 @@ func (t *MultiTopology) IsRouteReflector(nodeID string, labels map[string]string
 	return ok
 }
 
-func (t *MultiTopology) GetClusterID(nodeID string) string {
-	return fmt.Sprintf(t.ClusterID, getRouteReflectorID(nodeID))
+func (t *MultiTopology) GetClusterID(nodeID string, seed int) string {
+	count := strings.Count(t.ClusterID, "%d")
+	parts := make([]interface{}, count)
+
+	rand1 := rand.New(rand.NewSource(int64(getRouteReflectorID(nodeID))))
+	parts = append(parts, rand1.Int31n(254))
+
+	rand2 := rand.New(rand.NewSource(int64(seed)))
+	for len(parts) < count {
+		parts = append(parts, rand2.Int31n(254))
+	}
+
+	return fmt.Sprintf(t.ClusterID, parts...)
 }
 
 func (t *MultiTopology) GetNodeLabel(nodeID string) (string, string) {
@@ -174,10 +187,14 @@ func getRouteReflectorID(nodeID string) uint32 {
 }
 
 func NewMultiTopology(config Config) Topology {
-	return &MultiTopology{
+	t := &MultiTopology{
 		Config: config,
 		single: SingleTopology{
 			Config: config,
 		},
 	}
+
+	t.ClusterID = strings.Replace(t.ClusterID, ".0", ".%d", -1)
+
+	return t
 }
