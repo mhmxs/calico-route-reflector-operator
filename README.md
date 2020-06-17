@@ -34,7 +34,8 @@ After first reconcile phase is done don not forget to disable the [node-to-node 
 Use latest release:
 ```
 kustomize build config/crd | kubectl apply -f -
-$(cd config/manager && kustomize edit set image controller=quay.io/mhmxs/calico-route-reflector-controller:v0.0.3)
+$(cd config/default && kustomize edit add base ../manager)
+$(cd config/manager && kustomize edit set image controller=quay.io/mhmxs/calico-route-reflector-controller:v0.0.4)
 kustomize build config/default | kubectl apply -f -
 ```
 
@@ -56,6 +57,7 @@ Use custom datastore rather then in-cluster KDD:
 * Add your datastore settings to bases:
 
 ```
+# $(cd config/default && kustomize edit add base ../manager) # skip that step
 $(cd config/default && kustomize edit add base ../manager/etcd) # for ETCD
 $(cd config/default && kustomize edit add base ../manager/kdd) # for KDD
 ```

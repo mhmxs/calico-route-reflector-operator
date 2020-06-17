@@ -36,7 +36,7 @@ uninstall: manifests
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
-	cd config/manager && kustomize edit set image controller=$(IMG_REPO)/$(IMG_NAME):$(IMG_VERSION)
+	cd config/manager/bases && kustomize edit set image controller=$(IMG_REPO)/$(IMG_NAME):$(IMG_VERSION)
 	kustomize build config/default | kubectl apply -f -
 
 # Undeploy deletes resources
