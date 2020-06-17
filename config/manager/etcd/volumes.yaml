@@ -12,8 +12,7 @@ spec:
           - name: calico-route-reflector-etcd-config
             mountPath: "/root/etcd"
             readOnly: true
-      spec:
-        volumes:
-        - name: calico-route-reflector-etcd-config
-          secret:
-            secretName: calico-route-reflector-etcd-config
+      volumes:
+      - name: calico-route-reflector-etcd-config
+        secret:
+          secretName: calico-route-reflector-etcd-config

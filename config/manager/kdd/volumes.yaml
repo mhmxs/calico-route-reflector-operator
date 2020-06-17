@@ -12,8 +12,7 @@ spec:
           - name: calico-route-reflector-kdd-config
             mountPath: "/root/kdd"
             readOnly: true
-      spec:
-        volumes:
-        - name: calico-route-reflector-kdd-config
-          secret:
-            secretName: calico-route-reflector-kdd-config
+      volumes:
+      - name: calico-route-reflector-kdd-config
+        secret:
+          secretName: calico-route-reflector-kdd-config
