@@ -36,7 +36,7 @@ This Kubernetes operator can monitor and scale Calico route refloctor topology b
    * `do-not-select-as-rr` Has label
  * `ROUTE_REFLECTOR_TOPOLOGY` Selected topology of route reflectors [simple, multi], default `simple`
 
-You can edit or add those environment variables at the [manager](config/manager/bases/manager.yaml) manifest. You can add Calico client config related variables, Calico lib will parse it in the background.
+You can edit or add those environment variables at the [manager](config/manager/bases/manager.yaml) manifest. You can add Calico client config related variables and the client will parse them automatically in the background.
 
 During the `api/core/v1/Node` reconcile phases it calculates the right number of route refloctor nodes based on selected topology. It supports linear scaling only and it multiplies the number of nodes with the given ratio. Than updates the route reflector replicas to the expected number. After all the nodes are labeled correctly it regenerates BGP peer configurations for the cluster.
 
