@@ -19,6 +19,8 @@
 
  * Kubernetes cluster up and running
 
+## About
+
 This Kubernetes operator can monitor and scale Calico route refloctor topology based on node number. The operator has a few environment variables to configure behaviour:
 
  * `DATASTORE_TYPE` Calico datastore [`incluster`, `kubernetes`, `etcdv3`], default `incluster`
