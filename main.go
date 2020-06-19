@@ -116,7 +116,7 @@ func main() {
 		panic(err)
 	}
 
-	min, max, clusterID, ratio, nodeLabelKey, nodeLabelValue, zoneLabel := parseEnv()
+	min, max, clusterID, ratio, nodeLabelKey, nodeLabelValue, zoneLabel, incompatibleLabels := parseEnv()
 	topologyConfig := topologies.Config{
 		NodeLabelKey:   nodeLabelKey,
 		NodeLabelValue: nodeLabelValue,
@@ -153,12 +153,13 @@ func main() {
 	}
 
 	if err = (&controllers.RouteReflectorConfigReconciler{
-		Client:       mgr.GetClient(),
-		Log:          ctrl.Log.WithName("controllers").WithName("RouteReflectorConfig"),
-		Scheme:       mgr.GetScheme(),
-		NodeLabelKey: nodeLabelKey,
-		Topology:     topology,
-		Datastore:    datastore,
+		Client:             mgr.GetClient(),
+		Log:                ctrl.Log.WithName("controllers").WithName("RouteReflectorConfig"),
+		Scheme:             mgr.GetScheme(),
+		NodeLabelKey:       nodeLabelKey,
+		IncompatibleLabels: incompatibleLabels,
+		Topology:           topology,
+		Datastore:          datastore,
 		BGPPeer: bgppeer.BGPPeer{
 			CalicoClient: calicoClient,
 		},
@@ -176,7 +177,7 @@ func main() {
 }
 
 // TODO more sophisticated env parse and validation or use CRD
-func parseEnv() (int, int, string, float64, string, string, string) {
+func parseEnv() (int, int, string, float64, string, string, string, map[string]string) {
 	var err error
 	clusterID := defaultClusterID
 	if v, ok := os.LookupEnv("ROUTE_REFLECTOR_CLUSTER_ID"); ok {
@@ -227,7 +228,15 @@ func parseEnv() (int, int, string, float64, string, string, string) {
 
 	zoneLable := os.Getenv("ROUTE_REFLECTOR_ZONE_LABEL")
 
-	return min, max, clusterID, ratio, nodeLabelKey, nodeLabelValue, zoneLable
+	incompatibleLabels := map[string]string{}
+	if v, ok := os.LookupEnv("ROUTE_REFLECTOR_INCOMPATIBLE_NODE_LABELS"); ok {
+		for _, l := range strings.Split(v, ",") {
+			key, value := getKeyValue(strings.Trim(l, " "))
+			incompatibleLabels[key] = value
+		}
+	}
+
+	return min, max, clusterID, ratio, nodeLabelKey, nodeLabelValue, zoneLable, incompatibleLabels
 }
 
 func getKeyValue(label string) (string, string) {

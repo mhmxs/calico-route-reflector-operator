@@ -20,6 +20,7 @@ This Kubernetes operator can monitor and scale Calico route refloctor topology b
  * `ROUTE_REFLECTOR_RATIO` Node / route reflector pod ratio, default `0.005` (`1000 * 0.005 = 5`)
  * `ROUTE_REFLECTOR_NODE_LABEL` Node label of the route reflector nodes, default `calico-route-reflector=`
  * `ROUTE_REFLECTOR_ZONE_LABEL` Node label of the zone, default ``
+ * `ROUTE_REFLECTOR_INCOMPATIBLE_NODE_LABELS` Comma separated list of incompatible node labels like `do-not-select-as-rr=true,do-not-select-this-too-as-rr=`, default ``
  * `ROUTE_REFLECTOR_TOPOLOGY` Selected topology of route reflectors [simple, multi], default `simple`
 
 You can edit or add those environment variables at the [manager](config/manager/bases/manager.yaml) manifest. You can add Calico client config related variables, Calico lib will parse it in the background.
@@ -75,8 +76,6 @@ $(cd config/default && kustomize edit add base ../manager/kdd) # for KDD
 
  * Use custom resource instead of environment variables
  * Dedicated or preferred node label
- * Disallow node label
- * Handle taints and tolerations
 
 # Contributing
 

@@ -38,6 +38,17 @@ import (
 
 var routeReflectorsUnderOperation = map[types.UID]bool{}
 
+var notReadyTaints = map[string]bool{
+	"node.kubernetes.io/not-ready":                   false,
+	"node.kubernetes.io/unreachable":                 false,
+	"node.kubernetes.io/out-of-disk":                 false,
+	"node.kubernetes.io/memory-pressure":             false,
+	"node.kubernetes.io/disk-pressure":               false,
+	"node.kubernetes.io/network-unavailable":         false,
+	"node.kubernetes.io/unschedulable":               false,
+	"node.cloudprovider.kubernetes.io/uninitialized": false,
+}
+
 var (
 	nodeNotFound = ctrl.Result{}
 	nodeCleaned  = ctrl.Result{Requeue: true}
@@ -59,13 +70,14 @@ var (
 // RouteReflectorConfigReconciler reconciles a RouteReflectorConfig object
 type RouteReflectorConfigReconciler struct {
 	client.Client
-	CalicoClient calicoClient.Interface
-	Log          logr.Logger
-	Scheme       *runtime.Scheme
-	NodeLabelKey string
-	Topology     topologies.Topology
-	Datastore    datastores.Datastore
-	BGPPeer      bgppeer.BGPPeer
+	CalicoClient       calicoClient.Interface
+	Log                logr.Logger
+	Scheme             *runtime.Scheme
+	NodeLabelKey       string
+	IncompatibleLabels map[string]string
+	Topology           topologies.Topology
+	Datastore          datastores.Datastore
+	BGPPeer            bgppeer.BGPPeer
 }
 
 type reconcileImplClient interface {
@@ -90,7 +102,7 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		log.Debugf("Node not found %s", req.Name)
 		return nodeNotFound, nil
 	} else if err == nil && r.Topology.IsRouteReflector(string(currentNode.GetUID()), currentNode.GetLabels()) && currentNode.GetDeletionTimestamp() != nil ||
-		!isNodeReady(&currentNode) || !isNodeSchedulable(&currentNode) {
+		!isNodeReady(&currentNode) || !isNodeSchedulable(&currentNode) || !r.isNodeCompatible(&currentNode) {
 		// Node is deleted right now or has some issues, better to remove form RRs
 		if err := r.removeRRStatus(req, &currentNode); err != nil {
 			log.Errorf("Unable to cleanup label on %s because of %s", req.Name, err.Error())
@@ -255,10 +267,10 @@ func (r *RouteReflectorConfigReconciler) collectNodeInfo(allNodes []corev1.Node)
 	filtered = map[*corev1.Node]bool{}
 
 	for i, n := range allNodes {
-		isReady := isNodeReady(&n)
-		isSchedulable := isNodeSchedulable(&n)
-		filtered[&allNodes[i]] = isReady && isSchedulable
-		if isReady && isSchedulable {
+		isOK := isNodeReady(&n) && isNodeSchedulable(&n) && r.isNodeCompatible(&n)
+
+		filtered[&allNodes[i]] = isOK
+		if isOK {
 			readyNodes++
 			if r.Topology.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
 				actualReadyNumber++
@@ -267,6 +279,16 @@ func (r *RouteReflectorConfigReconciler) collectNodeInfo(allNodes []corev1.Node)
 	}
 
 	return
+}
+
+func (r *RouteReflectorConfigReconciler) isNodeCompatible(node *corev1.Node) bool {
+	for k, v := range node.GetLabels() {
+		if iv, ok := r.IncompatibleLabels[k]; ok && iv == v {
+			return false
+		}
+	}
+
+	return true
 }
 
 func isNodeReady(node *corev1.Node) bool {
@@ -283,6 +305,12 @@ func isNodeSchedulable(node *corev1.Node) bool {
 	if node.Spec.Unschedulable == true {
 		return false
 	}
+	for _, taint := range node.Spec.Taints {
+		if _, ok := notReadyTaints[taint.Key]; ok {
+			return false
+		}
+	}
+
 	return true
 }
 
