@@ -74,7 +74,7 @@ type RouteReflectorConfigReconciler struct {
 	Log                logr.Logger
 	Scheme             *runtime.Scheme
 	NodeLabelKey       string
-	IncompatibleLabels map[string]string
+	IncompatibleLabels map[string]*string
 	Topology           topologies.Topology
 	Datastore          datastores.Datastore
 	BGPPeer            bgppeer.BGPPeer
@@ -214,8 +214,6 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		}
 	}
 
-	// TODO check do logs make sense to debug
-
 	return finished, nil
 }
 
@@ -283,7 +281,7 @@ func (r *RouteReflectorConfigReconciler) collectNodeInfo(allNodes []corev1.Node)
 
 func (r *RouteReflectorConfigReconciler) isNodeCompatible(node *corev1.Node) bool {
 	for k, v := range node.GetLabels() {
-		if iv, ok := r.IncompatibleLabels[k]; ok && iv == v {
+		if iv, ok := r.IncompatibleLabels[k]; ok && (iv == nil || *iv == v) {
 			return false
 		}
 	}

@@ -39,7 +39,6 @@ func (t *MultiTopology) IsRouteReflector(nodeID string, labels map[string]string
 }
 
 func (t *MultiTopology) GetClusterID(nodeID string, seed int64) string {
-	// TODO creation time
 	count := strings.Count(t.ClusterID, "%d")
 	parts := make([]interface{}, 0)
 
@@ -94,8 +93,8 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 	rrIndex := -1
 	rrIndexPerZone := map[string]int{}
 
-	for n, isReady := range nodes {
-		if !isReady || t.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
+	for n := range nodes {
+		if t.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
 			continue
 		}
 

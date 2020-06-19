@@ -177,7 +177,7 @@ func main() {
 }
 
 // TODO more sophisticated env parse and validation or use CRD
-func parseEnv() (int, int, string, float64, string, string, string, map[string]string) {
+func parseEnv() (int, int, string, float64, string, string, string, map[string]*string) {
 	var err error
 	clusterID := defaultClusterID
 	if v, ok := os.LookupEnv("ROUTE_REFLECTOR_CLUSTER_ID"); ok {
@@ -228,11 +228,15 @@ func parseEnv() (int, int, string, float64, string, string, string, map[string]s
 
 	zoneLable := os.Getenv("ROUTE_REFLECTOR_ZONE_LABEL")
 
-	incompatibleLabels := map[string]string{}
+	incompatibleLabels := map[string]*string{}
 	if v, ok := os.LookupEnv("ROUTE_REFLECTOR_INCOMPATIBLE_NODE_LABELS"); ok {
 		for _, l := range strings.Split(v, ",") {
 			key, value := getKeyValue(strings.Trim(l, " "))
-			incompatibleLabels[key] = value
+			if strings.Contains(l, "=") {
+				incompatibleLabels[key] = &value
+			} else {
+				incompatibleLabels[key] = nil
+			}
 		}
 	}
 
