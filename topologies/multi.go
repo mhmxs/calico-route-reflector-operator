@@ -169,7 +169,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 				PeerSelector: fmt.Sprintf("%s=='%d'", t.NodeLabelKey, rrID),
 			}
 
-			log.Debugf("Adding %s BGPPeers to the refresh list", clientConfig.Name)
+			log.Debugf("Adding %s to the BGPPeers refresh list", clientConfig.Name)
 			bgpPeerConfigs = append(bgpPeerConfigs, *clientConfig)
 
 		}

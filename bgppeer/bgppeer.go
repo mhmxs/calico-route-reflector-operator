@@ -34,7 +34,8 @@ func (b *BGPPeer) ListBGPPeers() (*calicoApi.BGPPeerList, error) {
 }
 
 func (b *BGPPeer) SaveBGPPeer(peer *calicoApi.BGPPeer) error {
-	if peer.GetUID() == "" {
+	exists, _ := b.CalicoClient.BGPPeers().Get(context.Background(), peer.Name, options.GetOptions{})
+	if exists == nil {
 		log.Debugf("Creating new BGPPeers: %s", peer.Name)
 		if _, err := b.CalicoClient.BGPPeers().Create(context.Background(), peer, options.SetOptions{}); err != nil {
 			return err
