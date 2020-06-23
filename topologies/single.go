@@ -83,7 +83,7 @@ func (t *SingleTopology) CalculateExpectedNumber(readyNodes int) int {
 	return int(exp)
 }
 
-func (t *SingleTopology) GenerateBGPPeers(_ []corev1.Node, _ map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList) []calicoApi.BGPPeer {
+func (t *SingleTopology) GenerateBGPPeers(_ []corev1.Node, _ map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList) ([]calicoApi.BGPPeer, []calicoApi.BGPPeer) {
 	bgpPeerConfigs := []calicoApi.BGPPeer{}
 
 	// TODO eliminate code duplication
@@ -128,7 +128,7 @@ func (t *SingleTopology) GenerateBGPPeers(_ []corev1.Node, _ map[*corev1.Node]bo
 
 	bgpPeerConfigs = append(bgpPeerConfigs, *clientConfig)
 
-	return bgpPeerConfigs
+	return bgpPeerConfigs, nil
 }
 
 func NewSingleTopology(config Config) Topology {

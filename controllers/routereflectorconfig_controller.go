@@ -194,11 +194,14 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 
 	log.Debugf("Existing BGPeers are: %v", existingBGPPeers.Items)
 
-	currentBGPPeers := r.Topology.GenerateBGPPeers(rrList.Items, nodes, existingBGPPeers)
-	log.Infof("Len of currentBGPPeers, objects to refresh: %v", len(currentBGPPeers))
-	log.Debugf("Current BGPeers are: %v", currentBGPPeers)
+	toRefresh, toDelete := r.Topology.GenerateBGPPeers(rrList.Items, nodes, existingBGPPeers)
 
-	for _, bp := range currentBGPPeers {
+	log.Infof("BGPPeers to refresh: %v", len(toRefresh))
+	// log.Debugf("To refresh BGPeers are: %v", toRefresh)
+	log.Infof("BGPPeers to delete: %v", len(toDelete))
+	// log.Debugf("To delete BGPeers are: %v", toDelete)
+
+	for _, bp := range toRefresh {
 		log.Infof("Saving %s BGPPeer", bp.Name)
 		if err := r.BGPPeer.SaveBGPPeer(&bp); err != nil {
 			log.Errorf("Unable to save BGPPeer because of %s", err.Error())
@@ -206,13 +209,11 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		}
 	}
 
-	for _, p := range existingBGPPeers.Items {
-		if !findBGPPeer(currentBGPPeers, p.GetName()) {
-			log.Debugf("Removing BGPPeer: %s", p.GetName())
-			if err := r.BGPPeer.RemoveBGPPeer(&p); err != nil {
-				log.Errorf("Unable to remove BGPPeer because of %s", err.Error())
-				return bgpPeerRemoveError, err
-			}
+	for _, p := range toDelete {
+		log.Debugf("Removing BGPPeer: %s", p.GetName())
+		if err := r.BGPPeer.RemoveBGPPeer(&p); err != nil {
+			log.Errorf("Unable to remove BGPPeer because of %s", err.Error())
+			return bgpPeerRemoveError, err
 		}
 	}
 
