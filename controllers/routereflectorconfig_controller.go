@@ -197,9 +197,11 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 	log.Debugf("Existing BGPeers are: %v", existingBGPPeers.Items)
 
 	currentBGPPeers := r.Topology.GenerateBGPPeers(rrList.Items, nodes, existingBGPPeers)
+	log.Infof("Len of currentBGPPeers, objects to refresh: %v", len(currentBGPPeers))
 	log.Debugf("Current BGPeers are: %v", currentBGPPeers)
 
 	for _, bp := range currentBGPPeers {
+		log.Infof("Saving %s BGPPeer", bp.Name)
 		if err := r.BGPPeer.SaveBGPPeer(&bp); err != nil {
 			log.Errorf("Unable to save BGPPeer because of %s", err.Error())
 			return bgpPeerError, err

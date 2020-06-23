@@ -21,6 +21,8 @@ import (
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	calicoClient "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
+
+	"github.com/prometheus/common/log"
 )
 
 type BGPPeer struct {
@@ -33,10 +35,12 @@ func (b *BGPPeer) ListBGPPeers() (*calicoApi.BGPPeerList, error) {
 
 func (b *BGPPeer) SaveBGPPeer(peer *calicoApi.BGPPeer) error {
 	if peer.GetUID() == "" {
+		log.Debugf("Creating new BGPPeers: %s", peer.Name)
 		if _, err := b.CalicoClient.BGPPeers().Create(context.Background(), peer, options.SetOptions{}); err != nil {
 			return err
 		}
 	} else {
+		log.Debugf("Updating existsing BGPPeers: %s", peer.Name)
 		if _, err := b.CalicoClient.BGPPeers().Update(context.Background(), peer, options.SetOptions{}); err != nil {
 			return err
 		}
