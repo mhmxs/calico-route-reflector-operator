@@ -26,6 +26,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/prometheus/common/log"
 )
 
 type MultiTopology struct {
@@ -122,6 +124,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 				}
 
 				rr := rrsSameZone[rrIndexPerZone[nodeZone]]
+				log.Debugf("Adding RR:%s to Node:%s", rr.Name, n.Name)
 				routeReflectorsForNode = append(routeReflectorsForNode, rr)
 			}
 		}
@@ -140,6 +143,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 				}
 			}
 
+			log.Debugf("Adding RR:%s to Node:%s", rr.Name, n.Name)
 			routeReflectorsForNode = append(routeReflectorsForNode, rr)
 		}
 
@@ -165,6 +169,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 				PeerSelector: fmt.Sprintf("%s=='%d'", t.NodeLabelKey, rrID),
 			}
 
+			log.Debugf("Adding %s BGPPeers to the refresh list", clientConfig.Name)
 			bgpPeerConfigs = append(bgpPeerConfigs, *clientConfig)
 
 		}
