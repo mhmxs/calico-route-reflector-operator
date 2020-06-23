@@ -21,6 +21,7 @@ import (
 	"math"
 	"math/rand"
 	"strings"
+	"time"
 
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	corev1 "k8s.io/api/core/v1"
@@ -38,6 +39,10 @@ type MultiTopology struct {
 func (t *MultiTopology) IsRouteReflector(nodeID string, labels map[string]string) bool {
 	_, ok := labels[t.NodeLabelKey]
 	return ok
+}
+
+func (t *MultiTopology) IsMultiZone(nodes map[*corev1.Node]bool) bool {
+	return t.single.IsMultiZone(nodes)
 }
 
 func (t *MultiTopology) GetClusterID(nodeID string, seed int64) string {
@@ -92,62 +97,43 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 
 	peers := int(math.Min(float64(len(routeReflectors)), 3))
 
-	rrIndex := -1
-	rrIndexPerZone := map[string]int{}
+	isMultiZone := t.IsMultiZone(nodes)
 
+	rand.Seed(time.Now().UnixNano())
 	for n := range nodes {
 		if t.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
 			continue
 		}
 
-		routeReflectorsForNode := []corev1.Node{}
+		routeReflectorsForNode := map[*corev1.Node]bool{}
 
-		if t.Config.ZoneLabel != "" {
-			nodeZone := n.GetLabels()[t.Config.ZoneLabel]
-			rrsSameZone := []corev1.Node{}
+		// Select the first two RRs from different zones in Multi Zone clusters
+		if isMultiZone {
+			firstRR := &routeReflectors[rand.Intn(len(routeReflectors))]
+			log.Debugf("Selecting 1st RR:%s for Node:%s", firstRR.Name, n.Name)
+			routeReflectorsForNode[firstRR] = true
 
-			for i, rr := range routeReflectors {
-				rrZone := rr.GetLabels()[t.Config.ZoneLabel]
-				if nodeZone == rrZone {
-					if _, ok := rrIndexPerZone[nodeZone]; !ok {
-						rrIndexPerZone[nodeZone] = -1
-					}
-
-					rrsSameZone = append(rrsSameZone, routeReflectors[i])
+			for len(routeReflectorsForNode) < 2 {
+				rr := &routeReflectors[rand.Intn(len(routeReflectors))]
+				if rr.GetLabels()[t.Config.ZoneLabel] != firstRR.GetLabels()[t.Config.ZoneLabel] {
+					log.Debugf("Selecting 2nd RR:%s for Node:%s", rr.Name, n.Name)
+					routeReflectorsForNode[rr] = true
 				}
-			}
-
-			if len(rrsSameZone) > 0 {
-				rrIndexPerZone[nodeZone]++
-				if rrIndexPerZone[nodeZone] == len(rrsSameZone) {
-					rrIndexPerZone[nodeZone] = 0
-				}
-
-				rr := rrsSameZone[rrIndexPerZone[nodeZone]]
-				log.Debugf("Adding RR:%s to Node:%s", rr.Name, n.Name)
-				routeReflectorsForNode = append(routeReflectorsForNode, rr)
 			}
 		}
 
+		// Select the remaning RRs randomly
 		for len(routeReflectorsForNode) < peers {
-			rrIndex++
-			if rrIndex == len(routeReflectors) {
-				rrIndex = 0
+			rr := &routeReflectors[rand.Intn(len(routeReflectors))]
+			if _, ok := routeReflectorsForNode[rr]; !ok {
+				log.Debugf("Selecting Nth RRs:%s for Node:%s", rr.Name, n.Name)
+				routeReflectorsForNode[rr] = true
 			}
-
-			rr := routeReflectors[rrIndex]
-
-			for _, r := range routeReflectorsForNode {
-				if r.GetName() == rr.GetName() {
-					continue
-				}
-			}
-
-			log.Debugf("Adding RR:%s to Node:%s", rr.Name, n.Name)
-			routeReflectorsForNode = append(routeReflectorsForNode, rr)
 		}
 
-		for _, rr := range routeReflectorsForNode {
+		// This way the selected RRs will be from multiple zones,
+		// but not necessarily from the same zone as the Node.
+		for rr := range routeReflectorsForNode {
 			rrID := getRouteReflectorID(string(rr.GetUID()))
 			name := fmt.Sprintf(DefaultRouteReflectorClientName+"-%s", rrID, n.GetUID())
 

@@ -36,6 +36,16 @@ func (t *SingleTopology) IsRouteReflector(_ string, labels map[string]string) bo
 	return ok && label == t.NodeLabelValue
 }
 
+func (t *SingleTopology) IsMultiZone(nodes map[*corev1.Node]bool) bool {
+	rrZones := map[string]bool{}
+	for n := range nodes {
+		if _, ok := rrZones[n.GetLabels()[t.Config.ZoneLabel]]; !ok {
+			rrZones[n.GetLabels()[t.Config.ZoneLabel]] = true
+		}
+	}
+	return len(rrZones) > 1
+}
+
 func (t *SingleTopology) GetClusterID(string, int64) string {
 	return t.ClusterID
 }

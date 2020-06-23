@@ -30,6 +30,7 @@ const (
 
 type Topology interface {
 	IsRouteReflector(string, map[string]string) bool
+	IsMultiZone(map[*corev1.Node]bool) bool
 	GetClusterID(string, int64) string
 	GetNodeLabel(string) (string, string)
 	NewNodeListOptions(labels map[string]string) client.ListOptions

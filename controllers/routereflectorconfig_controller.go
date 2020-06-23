@@ -93,7 +93,6 @@ type reconcileImplClient interface {
 
 func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("routereflectorconfig", req.Name)
-	log.Base().SetLevel("debug")
 
 	currentNode := corev1.Node{}
 	if err := r.Client.Get(context.Background(), req.NamespacedName, &currentNode); err != nil && !errors.IsNotFound(err) {
