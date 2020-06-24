@@ -45,6 +45,10 @@ func (t *MultiTopology) IsMultiZone(nodes map[*corev1.Node]bool) bool {
 	return t.single.IsMultiZone(nodes)
 }
 
+func (t *MultiTopology) GetRRsofNode(nodes map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList, node *corev1.Node) (rrs map[*corev1.Node]bool) {
+	return t.single.GetRRsofNode(nodes, existingPeers, node)
+}
+
 func (t *MultiTopology) GetClusterID(nodeID string, seed int64) string {
 	count := strings.Count(t.ClusterID, "%d")
 	parts := make([]interface{}, 0)
@@ -100,8 +104,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 	}
 	toKeep[rrConfig.Name] = true
 
-	peers := int(math.Min(float64(len(routeReflectors)), 3))
-
+	rrsPerNode := int(math.Min(float64(len(routeReflectors)), 3))
 	isMultiZone := t.IsMultiZone(nodes)
 
 	rand.Seed(time.Now().UnixNano())
@@ -110,15 +113,28 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			continue
 		}
 
-		routeReflectorsForNode := map[*corev1.Node]bool{}
+		routeReflectorsForNode := t.GetRRsofNode(nodes, existingPeers, n)
+		log.Debugf("Found %v RRs for Node:%s", len(routeReflectorsForNode), n.Name)
 
 		// Select the first two RRs from different zones in Multi Zone clusters
+		// These aren't necessarily from the same cluster as the Node
 		if isMultiZone {
-			firstRR := &routeReflectors[rand.Intn(len(routeReflectors))]
-			log.Debugf("Selecting 1st RR:%s for Node:%s", firstRR.Name, n.Name)
-			routeReflectorsForNode[firstRR] = true
 
-			for len(routeReflectorsForNode) < 2 {
+			var firstRR *corev1.Node
+			if len(routeReflectorsForNode) == 0 {
+				firstRR = &routeReflectors[rand.Intn(len(routeReflectors))]
+				log.Debugf("Selecting 1st RR:%s for Node:%s", firstRR.Name, n.Name)
+				routeReflectorsForNode[firstRR] = true
+			} else if len(routeReflectorsForNode) == 1 {
+				// Get the single RR pointer
+				for k := range routeReflectorsForNode {
+					firstRR = k
+					log.Debugf("Found single RR:%s of Node:%s", firstRR.Name, n.Name)
+					break
+				}
+			}
+
+			for 1 < len(routeReflectors) && len(routeReflectorsForNode) < 2 {
 				rr := &routeReflectors[rand.Intn(len(routeReflectors))]
 				if rr.GetLabels()[t.Config.ZoneLabel] != firstRR.GetLabels()[t.Config.ZoneLabel] {
 					log.Debugf("Selecting 2nd RR:%s for Node:%s", rr.Name, n.Name)
@@ -127,8 +143,9 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			}
 		}
 
-		// Select the remaning RRs randomly
-		for len(routeReflectorsForNode) < peers {
+		// Select the remaning RRs randomly for MZR clusters
+		// For single zone clusters, select all RRs randomly
+		for len(routeReflectorsForNode) < rrsPerNode {
 			rr := &routeReflectors[rand.Intn(len(routeReflectors))]
 			if _, ok := routeReflectorsForNode[rr]; !ok {
 				log.Debugf("Selecting Nth RRs:%s for Node:%s", rr.Name, n.Name)

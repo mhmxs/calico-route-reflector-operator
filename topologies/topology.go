@@ -31,6 +31,7 @@ const (
 type Topology interface {
 	IsRouteReflector(string, map[string]string) bool
 	IsMultiZone(map[*corev1.Node]bool) bool
+	GetRRsofNode(map[*corev1.Node]bool, *calicoApi.BGPPeerList, *corev1.Node) map[*corev1.Node]bool
 	GetClusterID(string, int64) string
 	GetNodeLabel(string) (string, string)
 	NewNodeListOptions(labels map[string]string) client.ListOptions

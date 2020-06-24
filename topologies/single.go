@@ -18,6 +18,7 @@ package topologies
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	corev1 "k8s.io/api/core/v1"
@@ -25,6 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/prometheus/common/log"
 )
 
 type SingleTopology struct {
@@ -44,6 +47,29 @@ func (t *SingleTopology) IsMultiZone(nodes map[*corev1.Node]bool) bool {
 		}
 	}
 	return len(rrZones) > 1
+}
+
+func (t *SingleTopology) GetRRsofNode(nodes map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList, node *corev1.Node) map[*corev1.Node]bool {
+	rrIDs := map[string]bool{}
+	rrs := map[*corev1.Node]bool{}
+
+	// Select rr-id from BGPPeers where the NodeSelector matches the node
+	for _, bp := range existingPeers.Items {
+		if strings.Contains(bp.Spec.NodeSelector, node.Name) {
+			rrID := strings.ReplaceAll(strings.Split(bp.Spec.PeerSelector, "==")[1], "'", "")
+			log.Debugf("Found rr-id:%s as existing RR of Node:%s", rrID, node.Name)
+			rrIDs[rrID] = true
+		}
+	}
+
+	// Consider a node as RR if it has the rr-id label
+	for n := range nodes {
+		if _, ok := rrIDs[n.GetLabels()[t.Config.NodeLabelKey]]; ok {
+			log.Debugf("Found %s as existing RR of Node:%s", n.Name, node.Name)
+			rrs[n] = true
+		}
+	}
+	return rrs
 }
 
 func (t *SingleTopology) GetClusterID(string, int64) string {

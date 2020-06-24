@@ -194,12 +194,23 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 
 	log.Debugf("Existing BGPeers are: %v", existingBGPPeers.Items)
 
+	// FIXME: refresh nodes for up-to-date rr-ids
+	listOptions = r.Topology.NewNodeListOptions(currentNode.GetLabels())
+	log.Debugf("List options are %v", listOptions)
+	nodeList = corev1.NodeList{}
+	if err := r.Client.List(context.Background(), &nodeList, &listOptions); err != nil {
+		log.Errorf("Unable to list nodes because of %s", err.Error())
+		return nodeListError, err
+	}
+	log.Debugf("Total number of nodes %d", len(nodeList.Items))
+	_, _, nodes = r.collectNodeInfo(nodeList.Items)
+
 	toRefresh, toDelete := r.Topology.GenerateBGPPeers(rrList.Items, nodes, existingBGPPeers)
 
 	log.Infof("BGPPeers to refresh: %v", len(toRefresh))
-	// log.Debugf("To refresh BGPeers are: %v", toRefresh)
+	log.Debugf("To refresh BGPeers are: %v", toRefresh)
 	log.Infof("BGPPeers to delete: %v", len(toDelete))
-	// log.Debugf("To delete BGPeers are: %v", toDelete)
+	log.Debugf("To delete BGPeers are: %v", toDelete)
 
 	for _, bp := range toRefresh {
 		log.Infof("Saving %s BGPPeer", bp.Name)
