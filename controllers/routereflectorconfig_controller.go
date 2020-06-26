@@ -24,7 +24,6 @@ import (
 	"github.com/mhmxs/calico-route-reflector-operator/datastores"
 	"github.com/mhmxs/calico-route-reflector-operator/topologies"
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	"github.com/prometheus/common/log"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,6 +33,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	calicoClient "github.com/projectcalico/libcalico-go/lib/clientv3"
+
+	"github.com/prometheus/common/log"
 )
 
 var routeReflectorsUnderOperation = map[types.UID]bool{}
@@ -195,9 +196,11 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 	log.Debugf("Existing BGPeers are: %v", existingBGPPeers.Items)
 
 	currentBGPPeers := r.Topology.GenerateBGPPeers(rrList.Items, nodes, existingBGPPeers)
+	log.Infof("Len of currentBGPPeers, objects to refresh: %v", len(currentBGPPeers))
 	log.Debugf("Current BGPeers are: %v", currentBGPPeers)
 
 	for _, bp := range currentBGPPeers {
+		log.Infof("Saving %s BGPPeer", bp.Name)
 		if err := r.BGPPeer.SaveBGPPeer(&bp); err != nil {
 			log.Errorf("Unable to save BGPPeer because of %s", err.Error())
 			return bgpPeerError, err
@@ -206,7 +209,7 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 
 	for _, p := range existingBGPPeers.Items {
 		if !findBGPPeer(currentBGPPeers, p.GetName()) {
-			log.Debugf("Removing BGPPeer: %s", p.GetName())
+			log.Infof("Removing BGPPeer: %s", p.GetName())
 			if err := r.BGPPeer.RemoveBGPPeer(&p); err != nil {
 				log.Errorf("Unable to remove BGPPeer because of %s", err.Error())
 				return bgpPeerRemoveError, err
