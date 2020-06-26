@@ -80,8 +80,6 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 	toKeep := map[string]bool{}
 
 	rrConfig := findBGPPeer(existingPeers.Items, DefaultRouteReflectorMeshName)
-	selector := fmt.Sprintf("has(%s)", t.NodeLabelKey)
-
 	if rrConfig == nil {
 		log.Debugf("Creating new RR full-mesh BGPPeers: %s", DefaultRouteReflectorMeshName)
 		rrConfig = &calicoApi.BGPPeer{
@@ -94,6 +92,8 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			},
 		}
 	}
+
+	selector := fmt.Sprintf("has(%s)", t.NodeLabelKey)
 	if rrConfig.Spec.NodeSelector != selector || rrConfig.Spec.PeerSelector != selector {
 		rrConfig.Spec = calicoApi.BGPPeerSpec{
 			NodeSelector: selector,
@@ -121,12 +121,17 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 		if isMultiZone {
 
 			var firstRR *corev1.Node
+			// Select the first RR randomly if there or no active RRs
+			// or get the single RR's pointer
+			//
+			// This might lead to suboptimal RR selection
+			// when there're two active RRs and they're from the same zone
+			// it isn't ensure that the 3rd one is picked from a different zone
 			if len(routeReflectorsForNode) == 0 {
 				firstRR = &routeReflectors[rand.Intn(len(routeReflectors))]
 				log.Debugf("Selecting 1st RR:%s for Node:%s", firstRR.Name, n.Name)
 				routeReflectorsForNode[firstRR] = true
 			} else if len(routeReflectorsForNode) == 1 {
-				// Get the single RR pointer
 				for k := range routeReflectorsForNode {
 					firstRR = k
 					log.Debugf("Found single RR:%s of Node:%s", firstRR.Name, n.Name)
@@ -134,6 +139,8 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 				}
 			}
 
+			// Select the second RR
+			// FIXME: infinite loop
 			for 1 < len(routeReflectors) && len(routeReflectorsForNode) < 2 {
 				rr := &routeReflectors[rand.Intn(len(routeReflectors))]
 				if rr.GetLabels()[t.Config.ZoneLabel] != firstRR.GetLabels()[t.Config.ZoneLabel] {
