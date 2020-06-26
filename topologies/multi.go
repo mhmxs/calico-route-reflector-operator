@@ -140,17 +140,10 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			}
 
 			rr := routeReflectors[rrIndex]
-
-			for _, r := range routeReflectorsForNode {
-				log.Debugf("r.GetName() = %s rr.GetName() = %s", r.GetName(), rr.GetName())
-				if r.GetName() == rr.GetName() {
-					log.Debugf("Skipping RR:%s as it's already selected", rr.Name)
-					continue
-				}
+			if !isAlreadySelected(routeReflectorsForNode, rr) {
+				log.Debugf("Adding %s to RRs of %s", rr.GetName(), n.GetName())
+				routeReflectorsForNode = append(routeReflectorsForNode, rr)
 			}
-
-			log.Debugf("Adding %s to RRs of %s", rr.GetName(), n.GetName())
-			routeReflectorsForNode = append(routeReflectorsForNode, rr)
 		}
 
 		for _, rr := range routeReflectorsForNode {
@@ -182,6 +175,15 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 	}
 
 	return bgpPeerConfigs
+}
+
+func isAlreadySelected(rrs []corev1.Node, r corev1.Node) bool {
+	for i := range rrs {
+		if rrs[i].GetName() == r.GetName() {
+			return true
+		}
+	}
+	return false
 }
 
 func (t *MultiTopology) getNodeLabel(nodeID string) string {

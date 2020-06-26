@@ -94,7 +94,6 @@ type reconcileImplClient interface {
 
 func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("routereflectorconfig", req.Name)
-	log.Base().SetLevel("debug")
 
 	currentNode := corev1.Node{}
 	if err := r.Client.Get(context.Background(), req.NamespacedName, &currentNode); err != nil && !errors.IsNotFound(err) {
@@ -210,7 +209,7 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 
 	for _, p := range existingBGPPeers.Items {
 		if !findBGPPeer(currentBGPPeers, p.GetName()) {
-			log.Debugf("Removing BGPPeer: %s", p.GetName())
+			log.Infof("Removing BGPPeer: %s", p.GetName())
 			if err := r.BGPPeer.RemoveBGPPeer(&p); err != nil {
 				log.Errorf("Unable to remove BGPPeer because of %s", err.Error())
 				return bgpPeerRemoveError, err
