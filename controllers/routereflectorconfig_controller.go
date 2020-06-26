@@ -24,7 +24,6 @@ import (
 	"github.com/mhmxs/calico-route-reflector-operator/datastores"
 	"github.com/mhmxs/calico-route-reflector-operator/topologies"
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	"github.com/prometheus/common/log"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,6 +33,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	calicoClient "github.com/projectcalico/libcalico-go/lib/clientv3"
+
+	"github.com/prometheus/common/log"
 )
 
 var routeReflectorsUnderOperation = map[types.UID]bool{}
@@ -93,6 +94,7 @@ type reconcileImplClient interface {
 
 func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("routereflectorconfig", req.Name)
+	log.Base().SetLevel("debug")
 
 	currentNode := corev1.Node{}
 	if err := r.Client.Get(context.Background(), req.NamespacedName, &currentNode); err != nil && !errors.IsNotFound(err) {

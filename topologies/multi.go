@@ -26,6 +26,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/prometheus/common/log"
 )
 
 type MultiTopology struct {
@@ -101,16 +103,20 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 		routeReflectorsForNode := []corev1.Node{}
 
 		if t.Config.ZoneLabel != "" {
+			log.Debugf("Node's zone: %s", n.GetLabels()[t.Config.ZoneLabel])
+
 			nodeZone := n.GetLabels()[t.Config.ZoneLabel]
 			rrsSameZone := []corev1.Node{}
 
 			for i, rr := range routeReflectors {
 				rrZone := rr.GetLabels()[t.Config.ZoneLabel]
+				log.Debugf("RR:%s's zone: %s", rr.Name, rrZone)
 				if nodeZone == rrZone {
 					if _, ok := rrIndexPerZone[nodeZone]; !ok {
 						rrIndexPerZone[nodeZone] = -1
 					}
 
+					log.Debugf("Adding RR:%s to Same Zone RRs", rr.Name)
 					rrsSameZone = append(rrsSameZone, routeReflectors[i])
 				}
 			}
@@ -122,6 +128,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 				}
 
 				rr := rrsSameZone[rrIndexPerZone[nodeZone]]
+				log.Debugf("Adding %s to RRs for Node:%s", rr.Name, n.Name)
 				routeReflectorsForNode = append(routeReflectorsForNode, rr)
 			}
 		}
@@ -135,11 +142,14 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			rr := routeReflectors[rrIndex]
 
 			for _, r := range routeReflectorsForNode {
+				log.Debugf("r.GetName() = %s rr.GetName() = %s", r.GetName(), rr.GetName())
 				if r.GetName() == rr.GetName() {
+					log.Debugf("Skipping RR:%s as it's already selected", rr.Name)
 					continue
 				}
 			}
 
+			log.Debugf("Adding %s to RRs of %s", rr.GetName(), n.GetName())
 			routeReflectorsForNode = append(routeReflectorsForNode, rr)
 		}
 
