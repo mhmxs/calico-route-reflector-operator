@@ -40,7 +40,7 @@ func (b *BGPPeer) SaveBGPPeer(peer *calicoApi.BGPPeer) error {
 			return err
 		}
 	} else {
-		log.Debugf("Updating existsing BGPPeers: %s", peer.Name)
+		log.Debugf("Updating existing BGPPeers: %s", peer.Name)
 		if _, err := b.CalicoClient.BGPPeers().Update(context.Background(), peer, options.SetOptions{}); err != nil {
 			return err
 		}

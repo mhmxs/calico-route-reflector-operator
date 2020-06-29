@@ -21,7 +21,7 @@
 
 ## About
 
-This Kubernetes operator can monitor and scale Calico route refloctor topology based on node number. The operator has a few environment variables to configure behaviour:
+This Kubernetes operator can monitor and scale Calico route reflector topology based on node number. The operator has a few environment variables to configure behaviour:
 
  * `DATASTORE_TYPE` Calico datastore [`incluster`, `kubernetes`, `etcdv3`], default `incluster`
  * `ROUTE_REFLECTOR_CLUSTER_ID` Route reflector cluster ID, default `224.0.0.0`
@@ -38,7 +38,7 @@ This Kubernetes operator can monitor and scale Calico route refloctor topology b
 
 You can edit or add those environment variables at the [manager](config/manager/bases/manager.yaml) manifest. You can add Calico client config related variables and the client will parse them automatically in the background.
 
-During the `api/core/v1/Node` reconcile phases it calculates the right number of route refloctor nodes based on selected topology. It supports linear scaling only and it multiplies the number of nodes with the given ratio. Than updates the route reflector replicas to the expected number. After all the nodes are labeled correctly it regenerates BGP peer configurations for the cluster.
+During the `api/core/v1/Node` reconcile phases it calculates the right number of route reflector nodes based on selected topology. It supports linear scaling only and it multiplies the number of nodes with the given ratio. Than updates the route reflector replicas to the expected number. After all the nodes are labeled correctly it regenerates BGP peer configurations for the cluster.
 
 ## Usage
 
@@ -83,7 +83,7 @@ $(cd config/default && kustomize edit add base ../manager/kdd) # for KDD
 
  * In the current implementation each reconcile loop fetches all nodes and all BGP peer configurations which could take too much time in large clusters.
  * Multi cluster topology rebalances the whole cluster on case of nodes are added. If you are unlicky it could drop all 3 route reflector sessions which chause 1-2 sec network outage.
- * Multi cluster topology generates 3 BGP peers per node, which can grow in large cluster. Would be better to create BGP peer configuration for eahc route reflector combination to decrease number of BGP peer configs. For example: `[1,2,3]`, `[1,2,4]`, `[2,3,4]`, `[1,3,4]`
+ * Multi cluster topology generates 3 BGP peers per node, which can grow in large cluster. Would be better to create BGP peer configuration for each route reflector combination to decrease number of BGP peer configs. For example: `[1,2,3]`, `[1,2,4]`, `[2,3,4]`, `[1,3,4]`
 
 ## Roadmap
 
