@@ -32,6 +32,7 @@ type Topology interface {
 	IsRouteReflector(string, map[string]string) bool
 	GetClusterID(string, int64) string
 	GetNodeLabel(string) (string, string)
+	GetRRsofNode(map[*corev1.Node]bool, *calicoApi.BGPPeerList, *corev1.Node) map[*corev1.Node]bool
 	NewNodeListOptions(labels map[string]string) client.ListOptions
 	CalculateExpectedNumber(int) int
 	GenerateBGPPeers([]corev1.Node, map[*corev1.Node]bool, *calicoApi.BGPPeerList) []calicoApi.BGPPeer

@@ -18,6 +18,7 @@ package topologies
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	corev1 "k8s.io/api/core/v1"
@@ -25,6 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/prometheus/common/log"
 )
 
 type SingleTopology struct {
@@ -42,6 +45,43 @@ func (t *SingleTopology) GetClusterID(string, int64) string {
 
 func (t *SingleTopology) GetNodeLabel(string) (string, string) {
 	return t.NodeLabelKey, t.NodeLabelValue
+}
+
+// GetRRsofNode returns Node object pointers of the RRs of a Node
+// BGPPeers are used to resolve the node<>rr mappings
+func (t *SingleTopology) GetRRsofNode(nodes map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList, node *corev1.Node) map[*corev1.Node]bool {
+	rrIDs := map[string]bool{}
+	rrs := map[*corev1.Node]bool{}
+
+	for _, bp := range existingPeers.Items {
+
+		// Skip rrs-to-rrs which has "has()" NodeSlector
+		if strings.Contains(bp.Name, "rrs-to-rrs") {
+			log.Debugf("Skipping %s", bp.Name)
+			continue
+		}
+
+		// Get rr-id from PeerSelector in BGPeers where the NodeSelector matches the node
+		if t.keyFieldOfSelector(bp.Spec.NodeSelector) == node.Name {
+			peerSelector := t.keyFieldOfSelector(bp.Spec.PeerSelector)
+			log.Debugf("Found rr-id:%s in BGPPeers:%s as existing RR of Node:%s", peerSelector, bp.Name, node.Name)
+			rrIDs[peerSelector] = true
+		}
+	}
+
+	// Find RR Nodes by rr-id in the nodes map
+	for n := range nodes {
+		if _, ok := rrIDs[n.GetLabels()[t.Config.NodeLabelKey]]; ok {
+			log.Debugf("Found %s as existing RR of Node:%s", n.Name, node.Name)
+			rrs[n] = true
+		}
+	}
+
+	return rrs
+}
+
+func (t *SingleTopology) keyFieldOfSelector(s string) (key string) {
+	return strings.ReplaceAll(strings.Split(s, "==")[1], "'", "")
 }
 
 func (t *SingleTopology) NewNodeListOptions(nodeLabels map[string]string) client.ListOptions {

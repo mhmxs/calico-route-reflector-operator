@@ -59,6 +59,12 @@ func (t *MultiTopology) GetNodeLabel(nodeID string) (string, string) {
 	return t.NodeLabelKey, t.getNodeLabel(nodeID)
 }
 
+// GetRRsofNode returns Node object pointers of the RRs of a Node
+// BGPPeers are used to resolve the node<>rr mappings
+func (t *MultiTopology) GetRRsofNode(nodes map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList, node *corev1.Node) map[*corev1.Node]bool {
+	return t.single.GetRRsofNode(nodes, existingPeers, node)
+}
+
 func (t *MultiTopology) NewNodeListOptions(nodeLabels map[string]string) client.ListOptions {
 	return client.ListOptions{}
 }
