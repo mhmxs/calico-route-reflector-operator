@@ -124,11 +124,8 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 	log.Debugf("Total number of nodes %d", len(nodeList.Items))
 
 	readyNodes, actualRRNumber, nodes := r.collectNodeInfo(nodeList.Items)
-	log.Infof("Nodes are ready %d", readyNodes)
-	log.Infof("Actual number of healthy route reflector nodes are %d", actualRRNumber)
-
 	expectedRRNumber := r.Topology.CalculateExpectedNumber(readyNodes)
-	log.Infof("Expected number of route reflector nodes are %d", expectedRRNumber)
+	log.Infof("Nodes Ready=%d, route-reflectors (healthy/expected) = %d/%d", readyNodes, actualRRNumber, expectedRRNumber)
 
 	for n, isReady := range nodes {
 		if status, ok := routeReflectorsUnderOperation[n.GetUID()]; ok {
@@ -200,7 +197,7 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 	log.Debugf("Current BGPeers are: %v", currentBGPPeers)
 
 	for _, bp := range currentBGPPeers {
-		log.Infof("Saving %s BGPPeer", bp.Name)
+		log.Debugf("Saving %s BGPPeer", bp.Name)
 		if err := r.BGPPeer.SaveBGPPeer(&bp); err != nil {
 			log.Errorf("Unable to save BGPPeer because of %s", err.Error())
 			return bgpPeerError, err
