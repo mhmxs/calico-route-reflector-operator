@@ -20,6 +20,7 @@ import (
 	"hash/fnv"
 	"math"
 	"math/rand"
+	"sort"
 	"strings"
 
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -68,6 +69,20 @@ func (t *MultiTopology) CalculateExpectedNumber(readyNodes int) int {
 }
 
 func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList) []calicoApi.BGPPeer {
+
+	// Sorting RRs and Nodes for deterministic RR for Node selection
+	sort.Slice(routeReflectors, func(i, j int) bool {
+		return routeReflectors[i].GetName() < routeReflectors[j].GetName()
+	})
+
+	nodeList := []*corev1.Node{}
+	for n := range nodes {
+		nodeList = append(nodeList, n)
+	}
+	sort.Slice(nodeList, func(i, j int) bool {
+		return nodeList[i].GetName() < nodeList[j].GetName()
+	})
+
 	bgpPeerConfigs := []calicoApi.BGPPeer{}
 
 	rrConfig := findBGPPeer(existingPeers.Items, DefaultRouteReflectorMeshName)
@@ -95,7 +110,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 	rrIndex := -1
 	rrIndexPerZone := map[string]int{}
 
-	for n := range nodes {
+	for _, n := range nodeList {
 		if t.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
 			continue
 		}
