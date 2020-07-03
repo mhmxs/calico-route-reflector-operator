@@ -109,45 +109,48 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 
 	rrIndex := -1
 	rrIndexPerZone := map[string]int{}
+	rrPerZone := map[string][]*corev1.Node{}
+
+	// Creat per zone RR lists for MZR selection
+	if t.Config.ZoneLabel != "" {
+		for i, rr := range routeReflectors {
+			rrZone := rr.GetLabels()[t.Config.ZoneLabel]
+			log.Debugf("RR:%s's zone: %s", rr.Name, rrZone)
+			rrPerZone[rrZone] = append(rrPerZone[rrZone], &routeReflectors[i])
+		}
+	}
 
 	for _, n := range nodeList {
 		if t.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
 			continue
 		}
 
-		routeReflectorsForNode := []corev1.Node{}
+		routeReflectorsForNode := []*corev1.Node{}
 
+		// Run MZR selection first
 		if t.Config.ZoneLabel != "" {
-			log.Debugf("Node's zone: %s", n.GetLabels()[t.Config.ZoneLabel])
-
 			nodeZone := n.GetLabels()[t.Config.ZoneLabel]
-			rrsSameZone := []corev1.Node{}
+			log.Debugf("Node's zone: %s", nodeZone)
 
-			for i, rr := range routeReflectors {
-				rrZone := rr.GetLabels()[t.Config.ZoneLabel]
-				log.Debugf("RR:%s's zone: %s", rr.Name, rrZone)
-				if nodeZone == rrZone {
-					if _, ok := rrIndexPerZone[nodeZone]; !ok {
-						rrIndexPerZone[nodeZone] = -1
-					}
-
-					log.Debugf("Adding RR:%s to Same Zone RRs", rr.Name)
-					rrsSameZone = append(rrsSameZone, routeReflectors[i])
-				}
+			// Select the 1st RR from the same zone if there're any
+			if len(rrPerZone[nodeZone]) > 0 {
+				rr := selectRRfromZone(rrIndexPerZone, rrPerZone, nodeZone)
+				log.Debugf("Adding %s as 1st RR for Node:%s", rr.Name, n.Name)
+				routeReflectorsForNode = append(routeReflectorsForNode, rr)
 			}
 
-			if len(rrsSameZone) > 0 {
-				rrIndexPerZone[nodeZone]++
-				if rrIndexPerZone[nodeZone] == len(rrsSameZone) {
-					rrIndexPerZone[nodeZone] = 0
+			// Select the 2nd RR from a different zone
+			for zone := range rrPerZone {
+				if zone != nodeZone {
+					rr := selectRRfromZone(rrIndexPerZone, rrPerZone, zone)
+					log.Debugf("Adding %s as 2nd RR for Node:%s", rr.Name, n.Name)
+					routeReflectorsForNode = append(routeReflectorsForNode, rr)
+					break
 				}
-
-				rr := rrsSameZone[rrIndexPerZone[nodeZone]]
-				log.Debugf("Adding %s to RRs for Node:%s", rr.Name, n.Name)
-				routeReflectorsForNode = append(routeReflectorsForNode, rr)
 			}
 		}
 
+		// Selecting the remaning RRs sequentially
 		for len(routeReflectorsForNode) < peers {
 			rrIndex++
 			if rrIndex == len(routeReflectors) {
@@ -157,7 +160,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			rr := routeReflectors[rrIndex]
 			if !isAlreadySelected(routeReflectorsForNode, rr) {
 				log.Debugf("Adding %s to RRs of %s", rr.GetName(), n.GetName())
-				routeReflectorsForNode = append(routeReflectorsForNode, rr)
+				routeReflectorsForNode = append(routeReflectorsForNode, &rr)
 			}
 		}
 
@@ -192,7 +195,15 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 	return bgpPeerConfigs
 }
 
-func isAlreadySelected(rrs []corev1.Node, r corev1.Node) bool {
+func selectRRfromZone(rrIndexPerZone map[string]int, rrPerZone map[string][]*corev1.Node, zone string) *corev1.Node {
+	rrIndexPerZone[zone]++
+	if rrIndexPerZone[zone] == len(rrPerZone[zone]) {
+		rrIndexPerZone[zone] = 0
+	}
+	return rrPerZone[zone][rrIndexPerZone[zone]]
+}
+
+func isAlreadySelected(rrs []*corev1.Node, r corev1.Node) bool {
 	for i := range rrs {
 		if rrs[i].GetName() == r.GetName() {
 			return true
