@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/mhmxs/calico-route-reflector-operator/bgppeer"
@@ -203,6 +204,9 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 			return bgpPeerError, err
 		}
 	}
+
+	// Wait for new session to Establish
+	time.Sleep(10 * time.Second)
 
 	for _, p := range existingBGPPeers.Items {
 		if !findBGPPeer(currentBGPPeers, p.GetName()) {
