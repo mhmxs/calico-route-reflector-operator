@@ -125,34 +125,55 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 	log.Debugf("Total number of nodes %d", len(nodeList.Items))
 
 	readyNodes, actualRRNumber, nodes := r.collectNodeInfo(nodeList.Items)
+
+	if res, err := r.revertFailedModification(req, nodes); isRequeNeeded(res, err) {
+		return res, err
+	} else if res, err := r.updateNodeLabels(req, readyNodes, actualRRNumber, nodes); isRequeNeeded(res, err) {
+		return res, err
+	} else if res, err := r.updateBGPTopology(req, nodes); isRequeNeeded(res, err) {
+		return res, err
+	}
+
+	return finished, nil
+}
+
+func (r *RouteReflectorConfigReconciler) revertFailedModification(req ctrl.Request, nodes map[*corev1.Node]bool) (ctrl.Result, error) {
+	for n := range nodes {
+		status, ok := routeReflectorsUnderOperation[n.GetUID()]
+		if !ok {
+			continue
+		}
+		// Node was under operation, better to revert it
+		var err error
+		if status {
+			err = r.Datastore.RemoveRRStatus(n)
+		} else {
+			err = r.Datastore.AddRRStatus(n)
+		}
+		if err != nil {
+			log.Errorf("Failed to revert node %s because of %s", n.GetName(), err.Error())
+			return nodeRevertError, err
+		}
+
+		log.Infof("Revert route reflector label on %s to %t", n.GetName(), !status)
+		if err := r.Client.Update(context.Background(), n); err != nil && !errors.IsNotFound(err) {
+			log.Errorf("Failed to revert update node %s because of %s", n.GetName(), err.Error())
+			return nodeRevertUpdateError, err
+		}
+
+		delete(routeReflectorsUnderOperation, n.GetUID())
+
+		return nodeReverted, nil
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *RouteReflectorConfigReconciler) updateNodeLabels(req ctrl.Request, readyNodes int, actualRRNumber int, nodes map[*corev1.Node]bool) (ctrl.Result, error) {
 	expectedRRNumber := r.Topology.CalculateExpectedNumber(readyNodes)
 	log.Infof("Nodes Ready=%d, route-reflectors (healthy/expected) = %d/%d", readyNodes, actualRRNumber, expectedRRNumber)
 
 	for n, isReady := range nodes {
-		if status, ok := routeReflectorsUnderOperation[n.GetUID()]; ok {
-			// Node was under operation, better to revert it
-			var err error
-			if status {
-				err = r.Datastore.RemoveRRStatus(n)
-			} else {
-				err = r.Datastore.AddRRStatus(n)
-			}
-			if err != nil {
-				log.Errorf("Failed to revert node %s because of %s", n.GetName(), err.Error())
-				return nodeRevertError, err
-			}
-
-			log.Infof("Revert route reflector label on %s to %t", n.GetName(), !status)
-			if err := r.Client.Update(context.Background(), n); err != nil && !errors.IsNotFound(err) {
-				log.Errorf("Failed to revert update node %s because of %s", n.GetName(), err.Error())
-				return nodeRevertUpdateError, err
-			}
-
-			delete(routeReflectorsUnderOperation, n.GetUID())
-
-			return nodeReverted, nil
-		}
-
 		if !isReady || expectedRRNumber == actualRRNumber {
 			continue
 		}
@@ -173,6 +194,10 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		log.Errorf("Actual number %d is different than expected %d", actualRRNumber, expectedRRNumber)
 	}
 
+	return ctrl.Result{}, nil
+}
+
+func (r *RouteReflectorConfigReconciler) updateBGPTopology(req ctrl.Request, nodes map[*corev1.Node]bool) (ctrl.Result, error) {
 	rrLables := client.HasLabels{r.NodeLabelKey}
 	rrListOptions := client.ListOptions{}
 	rrLables.ApplyToList(&rrListOptions)
@@ -221,7 +246,7 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		}
 	}
 
-	return finished, nil
+	return ctrl.Result{}, nil
 }
 
 func (r *RouteReflectorConfigReconciler) removeRRStatus(req ctrl.Request, node *corev1.Node) error {
@@ -294,6 +319,10 @@ func (r *RouteReflectorConfigReconciler) isNodeCompatible(node *corev1.Node) boo
 	}
 
 	return true
+}
+
+func isRequeNeeded(res ctrl.Result, err error) bool {
+	return res.Requeue || res.RequeueAfter != 0 || err != nil
 }
 
 func isNodeReady(node *corev1.Node) bool {
