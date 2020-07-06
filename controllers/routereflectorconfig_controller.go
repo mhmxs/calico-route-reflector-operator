@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/mhmxs/calico-route-reflector-operator/bgppeer"
@@ -96,6 +97,17 @@ type reconcileImplClient interface {
 func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("routereflectorconfig", req.Name)
 
+	res, err := r.reconcile(req)
+
+	if res.RequeueAfter != 0 {
+		time.Sleep(res.RequeueAfter)
+		res.RequeueAfter = 0
+	}
+
+	return res, err
+}
+
+func (r *RouteReflectorConfigReconciler) reconcile(req ctrl.Request) (ctrl.Result, error) {
 	currentNode := corev1.Node{}
 	if err := r.Client.Get(context.Background(), req.NamespacedName, &currentNode); err != nil && !errors.IsNotFound(err) {
 		log.Errorf("Unable to fetch node %s because of %s", req.Name, err.Error())
@@ -376,7 +388,9 @@ func (ef eventFilter) Generic(event.GenericEvent) bool {
 	return true
 }
 
-func (r *RouteReflectorConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *RouteReflectorConfigReconciler) SetupWithManager(mgr ctrl.Manager, waitTimeout time.Duration) error {
+	bgpPeersUpdated.RequeueAfter = waitTimeout
+
 	// WARNING !!! The reconcile implementation IS NOT THREAD SAFE and HAS STATE !!! PLease DO NOT inrease number of instances more than 1 !!!
 	return ctrl.NewControllerManagedBy(mgr).
 		WithEventFilter(eventFilter{}).

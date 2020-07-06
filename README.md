@@ -35,6 +35,7 @@ This Kubernetes operator can monitor and scale Calico route reflector topology b
    * `do-not-select-as-rr=` Value must be empty
    * `do-not-select-as-rr` Has label
  * `ROUTE_REFLECTOR_TOPOLOGY` Selected topology of route reflectors [simple, multi], default `simple`
+ * `ROUTE_REFLECTOR_WAIT_TIMEOUT` Wait timeout in second. In some topology chages operator can wait for Calico to establish new connections, default: `0`
 
 You can edit or add those environment variables at the [manager](config/manager/bases/manager.yaml) manifest. You can add Calico client config related variables and the client will parse them automatically in the background.
 
