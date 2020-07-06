@@ -68,7 +68,7 @@ func (t *MultiTopology) CalculateExpectedNumber(readyNodes int) int {
 	return t.single.CalculateExpectedNumber(readyNodes)
 }
 
-func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList) []calicoApi.BGPPeer {
+func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList) (toRefresh []calicoApi.BGPPeer, toDelete []calicoApi.BGPPeer) {
 
 	// Sorting RRs and Nodes for deterministic RR for Node selection
 	sort.Slice(routeReflectors, func(i, j int) bool {
@@ -83,10 +83,9 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 		return nodeList[i].GetName() < nodeList[j].GetName()
 	})
 
-	bgpPeerConfigs := []calicoApi.BGPPeer{}
-
 	rrConfig := findBGPPeer(existingPeers.Items, DefaultRouteReflectorMeshName)
 	if rrConfig == nil {
+		log.Debugf("Creating new RR full-mesh BGPPeers: %s", DefaultRouteReflectorMeshName)
 		rrConfig = &calicoApi.BGPPeer{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       calicoApi.KindBGPPeer,
@@ -97,13 +96,19 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			},
 		}
 	}
-	selector := fmt.Sprintf("has(%s)", t.NodeLabelKey)
-	rrConfig.Spec = calicoApi.BGPPeerSpec{
-		NodeSelector: selector,
-		PeerSelector: selector,
-	}
 
-	bgpPeerConfigs = append(bgpPeerConfigs, *rrConfig)
+	toKeep := map[string]bool{}
+	selector := fmt.Sprintf("has(%s)", t.NodeLabelKey)
+	if rrConfig.Spec.NodeSelector != selector || rrConfig.Spec.PeerSelector != selector {
+		rrConfig.Spec = calicoApi.BGPPeerSpec{
+			NodeSelector: selector,
+			PeerSelector: selector,
+		}
+
+		toRefresh = append(toRefresh, *rrConfig)
+	} else {
+		toKeep[rrConfig.Name] = true
+	}
 
 	peers := int(math.Min(float64(len(routeReflectors)), 3))
 
@@ -166,7 +171,19 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			name := fmt.Sprintf(DefaultRouteReflectorClientName+"-%s", rrID, n.GetUID())
 
 			clientConfig := findBGPPeer(existingPeers.Items, name)
+
+			// TODO make configurable
+			newNodeSelector := fmt.Sprintf("kubernetes.io/hostname=='%s'", n.GetLabels()["kubernetes.io/hostname"])
+			newPeerSelector := fmt.Sprintf("%s=='%d'", t.NodeLabelKey, rrID)
+
+			// Keep BGPPeer if nor NodeSelector nor PeerSelector changed
+			if clientConfig != nil && clientConfig.Spec.NodeSelector == newNodeSelector && clientConfig.Spec.PeerSelector == newPeerSelector {
+				toKeep[clientConfig.Name] = true
+				continue
+			}
+
 			if clientConfig == nil {
+				log.Debugf("New BGPPeers: %s", name)
 				clientConfig = &calicoApi.BGPPeer{
 					TypeMeta: metav1.TypeMeta{
 						Kind:       calicoApi.KindBGPPeer,
@@ -177,19 +194,25 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 					},
 				}
 			}
+
 			clientConfig.Spec = calicoApi.BGPPeerSpec{
-				// TODO make configurable
-				NodeSelector: fmt.Sprintf("kubernetes.io/hostname=='%s'", n.GetLabels()["kubernetes.io/hostname"]),
-				PeerSelector: fmt.Sprintf("%s=='%d'", t.NodeLabelKey, rrID),
+				NodeSelector: newNodeSelector,
+				PeerSelector: newPeerSelector,
 			}
 
-			log.Debugf("Adding %s BGPPeers to the refresh list", clientConfig.Name)
-			bgpPeerConfigs = append(bgpPeerConfigs, *clientConfig)
-
+			log.Debugf("Adding %s to the BGPPeers refresh list", clientConfig.Name)
+			toRefresh = append(toRefresh, *clientConfig)
 		}
 	}
 
-	return bgpPeerConfigs
+	for i := range existingPeers.Items {
+		if _, ok := toKeep[existingPeers.Items[i].Name]; !ok && findBGPPeer(toRefresh, existingPeers.Items[i].Name) == nil {
+			log.Debugf("Adding %s to the BGPPeers delete list", existingPeers.Items[i].Name)
+			toDelete = append(toDelete, existingPeers.Items[i])
+		}
+	}
+
+	return
 }
 
 func isAlreadySelected(rrs []corev1.Node, r corev1.Node) bool {
