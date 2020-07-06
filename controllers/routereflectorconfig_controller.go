@@ -51,10 +51,11 @@ var notReadyTaints = map[string]bool{
 }
 
 var (
-	nodeNotFound = ctrl.Result{}
-	nodeCleaned  = ctrl.Result{Requeue: true}
-	nodeReverted = ctrl.Result{Requeue: true}
-	finished     = ctrl.Result{}
+	nodeNotFound    = ctrl.Result{}
+	nodeCleaned     = ctrl.Result{Requeue: true}
+	nodeReverted    = ctrl.Result{Requeue: true}
+	bgpPeersUpdated = ctrl.Result{Requeue: true}
+	finished        = ctrl.Result{}
 
 	nodeGetError          = ctrl.Result{}
 	nodeCleanupError      = ctrl.Result{}
@@ -205,6 +206,11 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 			log.Errorf("Unable to save BGPPeer because of %s", err.Error())
 			return bgpPeerError, err
 		}
+	}
+
+	// Give some time to Calico to establish new connections before deleting old ones
+	if len(toRefresh) > 0 {
+		return bgpPeersUpdated, nil
 	}
 
 	for _, p := range toDelete {
