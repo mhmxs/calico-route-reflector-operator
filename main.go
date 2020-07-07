@@ -24,6 +24,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	calicoApiConfig "github.com/projectcalico/libcalico-go/lib/apiconfig"
 	calicoClient "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -116,7 +117,7 @@ func main() {
 		panic(err)
 	}
 
-	min, max, clusterID, ratio, nodeLabelKey, nodeLabelValue, zoneLabel, incompatibleLabels := parseEnv()
+	min, max, clusterID, ratio, nodeLabelKey, nodeLabelValue, zoneLabel, incompatibleLabels, waitTimeout := parseEnv()
 	topologyConfig := topologies.Config{
 		NodeLabelKey:   nodeLabelKey,
 		NodeLabelValue: nodeLabelValue,
@@ -163,7 +164,7 @@ func main() {
 		BGPPeer: bgppeer.BGPPeer{
 			CalicoClient: calicoClient,
 		},
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, time.Duration(waitTimeout)*time.Second); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RouteReflectorConfig")
 		panic(err)
 	}
@@ -177,7 +178,7 @@ func main() {
 }
 
 // TODO more sophisticated env parse and validation or use CRD
-func parseEnv() (int, int, string, float64, string, string, string, map[string]*string) {
+func parseEnv() (int, int, string, float64, string, string, string, map[string]*string, int) {
 	var err error
 	clusterID := defaultClusterID
 	if v, ok := os.LookupEnv("ROUTE_REFLECTOR_CLUSTER_ID"); ok {
@@ -240,7 +241,16 @@ func parseEnv() (int, int, string, float64, string, string, string, map[string]*
 		}
 	}
 
-	return min, max, clusterID, ratio, nodeLabelKey, nodeLabelValue, zoneLable, incompatibleLabels
+	waitTimeout := 0
+	if v, ok := os.LookupEnv("ROUTE_REFLECTOR_WAIT_TIMEOUT"); ok {
+		waitTimeout, err = strconv.Atoi(v)
+		if err != nil {
+			setupLog.Error(err, "ROUTE_REFLECTOR_WAIT_TIMEOUT is not a valid integer")
+			panic(err)
+		}
+	}
+
+	return min, max, clusterID, ratio, nodeLabelKey, nodeLabelValue, zoneLable, incompatibleLabels, waitTimeout
 }
 
 func getKeyValue(label string) (string, string) {

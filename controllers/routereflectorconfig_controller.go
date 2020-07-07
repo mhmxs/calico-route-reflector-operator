@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/mhmxs/calico-route-reflector-operator/bgppeer"
@@ -51,10 +52,11 @@ var notReadyTaints = map[string]bool{
 }
 
 var (
-	nodeNotFound = ctrl.Result{}
-	nodeCleaned  = ctrl.Result{Requeue: true}
-	nodeReverted = ctrl.Result{Requeue: true}
-	finished     = ctrl.Result{}
+	nodeNotFound    = ctrl.Result{}
+	nodeCleaned     = ctrl.Result{Requeue: true}
+	nodeReverted    = ctrl.Result{Requeue: true}
+	bgpPeersUpdated = ctrl.Result{Requeue: true}
+	finished        = ctrl.Result{}
 
 	nodeGetError          = ctrl.Result{}
 	nodeCleanupError      = ctrl.Result{}
@@ -95,6 +97,17 @@ type reconcileImplClient interface {
 func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("routereflectorconfig", req.Name)
 
+	res, err := r.reconcile(req)
+
+	if res.RequeueAfter != 0 {
+		time.Sleep(res.RequeueAfter)
+		res.RequeueAfter = 0
+	}
+
+	return res, err
+}
+
+func (r *RouteReflectorConfigReconciler) reconcile(req ctrl.Request) (ctrl.Result, error) {
 	currentNode := corev1.Node{}
 	if err := r.Client.Get(context.Background(), req.NamespacedName, &currentNode); err != nil && !errors.IsNotFound(err) {
 		log.Errorf("Unable to fetch node %s because of %s", req.Name, err.Error())
@@ -124,34 +137,55 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 	log.Debugf("Total number of nodes %d", len(nodeList.Items))
 
 	readyNodes, actualRRNumber, nodes := r.collectNodeInfo(nodeList.Items)
+
+	if res, err := r.revertFailedModification(req, nodes); isRequeNeeded(res, err) {
+		return res, err
+	} else if res, err := r.updateNodeLabels(req, readyNodes, actualRRNumber, nodes); isRequeNeeded(res, err) {
+		return res, err
+	} else if res, err := r.updateBGPTopology(req, nodes); isRequeNeeded(res, err) {
+		return res, err
+	}
+
+	return finished, nil
+}
+
+func (r *RouteReflectorConfigReconciler) revertFailedModification(req ctrl.Request, nodes map[*corev1.Node]bool) (ctrl.Result, error) {
+	for n := range nodes {
+		status, ok := routeReflectorsUnderOperation[n.GetUID()]
+		if !ok {
+			continue
+		}
+		// Node was under operation, better to revert it
+		var err error
+		if status {
+			err = r.Datastore.RemoveRRStatus(n)
+		} else {
+			err = r.Datastore.AddRRStatus(n)
+		}
+		if err != nil {
+			log.Errorf("Failed to revert node %s because of %s", n.GetName(), err.Error())
+			return nodeRevertError, err
+		}
+
+		log.Infof("Revert route reflector label on %s to %t", n.GetName(), !status)
+		if err := r.Client.Update(context.Background(), n); err != nil && !errors.IsNotFound(err) {
+			log.Errorf("Failed to revert update node %s because of %s", n.GetName(), err.Error())
+			return nodeRevertUpdateError, err
+		}
+
+		delete(routeReflectorsUnderOperation, n.GetUID())
+
+		return nodeReverted, nil
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *RouteReflectorConfigReconciler) updateNodeLabels(req ctrl.Request, readyNodes int, actualRRNumber int, nodes map[*corev1.Node]bool) (ctrl.Result, error) {
 	expectedRRNumber := r.Topology.CalculateExpectedNumber(readyNodes)
 	log.Infof("Nodes Ready=%d, route-reflectors (healthy/expected) = %d/%d", readyNodes, actualRRNumber, expectedRRNumber)
 
 	for n, isReady := range nodes {
-		if status, ok := routeReflectorsUnderOperation[n.GetUID()]; ok {
-			// Node was under operation, better to revert it
-			var err error
-			if status {
-				err = r.Datastore.RemoveRRStatus(n)
-			} else {
-				err = r.Datastore.AddRRStatus(n)
-			}
-			if err != nil {
-				log.Errorf("Failed to revert node %s because of %s", n.GetName(), err.Error())
-				return nodeRevertError, err
-			}
-
-			log.Infof("Revert route reflector label on %s to %t", n.GetName(), !status)
-			if err := r.Client.Update(context.Background(), n); err != nil && !errors.IsNotFound(err) {
-				log.Errorf("Failed to revert update node %s because of %s", n.GetName(), err.Error())
-				return nodeRevertUpdateError, err
-			}
-
-			delete(routeReflectorsUnderOperation, n.GetUID())
-
-			return nodeReverted, nil
-		}
-
 		if !isReady || expectedRRNumber == actualRRNumber {
 			continue
 		}
@@ -172,6 +206,10 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		log.Errorf("Actual number %d is different than expected %d", actualRRNumber, expectedRRNumber)
 	}
 
+	return ctrl.Result{}, nil
+}
+
+func (r *RouteReflectorConfigReconciler) updateBGPTopology(req ctrl.Request, nodes map[*corev1.Node]bool) (ctrl.Result, error) {
 	rrLables := client.HasLabels{r.NodeLabelKey}
 	rrListOptions := client.ListOptions{}
 	rrLables.ApplyToList(&rrListOptions)
@@ -207,6 +245,11 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		}
 	}
 
+	// Give some time to Calico to establish new connections before deleting old ones
+	if len(toRefresh) > 0 {
+		return bgpPeersUpdated, nil
+	}
+
 	for _, p := range toDelete {
 		log.Debugf("Removing BGPPeer: %s", p.GetName())
 		if err := r.BGPPeer.RemoveBGPPeer(&p); err != nil {
@@ -215,7 +258,7 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 		}
 	}
 
-	return finished, nil
+	return ctrl.Result{}, nil
 }
 
 func (r *RouteReflectorConfigReconciler) removeRRStatus(req ctrl.Request, node *corev1.Node) error {
@@ -290,6 +333,10 @@ func (r *RouteReflectorConfigReconciler) isNodeCompatible(node *corev1.Node) boo
 	return true
 }
 
+func isRequeNeeded(res ctrl.Result, err error) bool {
+	return res.Requeue || res.RequeueAfter != 0 || err != nil
+}
+
 func isNodeReady(node *corev1.Node) bool {
 	for _, c := range node.Status.Conditions {
 		if c.Type == corev1.NodeReady {
@@ -341,7 +388,9 @@ func (ef eventFilter) Generic(event.GenericEvent) bool {
 	return true
 }
 
-func (r *RouteReflectorConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *RouteReflectorConfigReconciler) SetupWithManager(mgr ctrl.Manager, waitTimeout time.Duration) error {
+	bgpPeersUpdated.RequeueAfter = waitTimeout
+
 	// WARNING !!! The reconcile implementation IS NOT THREAD SAFE and HAS STATE !!! PLease DO NOT inrease number of instances more than 1 !!!
 	return ctrl.NewControllerManagedBy(mgr).
 		WithEventFilter(eventFilter{}).
