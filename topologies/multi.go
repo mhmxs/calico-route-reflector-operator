@@ -171,7 +171,6 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 		// TODO make configurable
 		nodeSelector := fmt.Sprintf("kubernetes.io/hostname=='%s'", n.GetLabels()["kubernetes.io/hostname"])
 
-		changed := 0
 		for _, rr := range routeReflectorsForNode {
 			rrID := getRouteReflectorID(string(rr.GetUID()))
 			name := fmt.Sprintf(DefaultRouteReflectorClientName+"-%s", rrID, n.GetUID())
@@ -182,8 +181,6 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 				toKeep[clientConfig.GetName()] = true
 				continue
 			}
-
-			changed++
 
 			log.Debugf("New BGPPeers: %s", name)
 			clientConfig = &calicoApi.BGPPeer{
@@ -202,26 +199,6 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 
 			log.Debugf("Adding %s to the BGPPeers refresh list", clientConfig.GetName())
 			toRefresh = append(toRefresh, *clientConfig)
-		}
-
-		if changed == peers {
-			log.Info("All route reflectors are new for the node, let's try to give back an old one")
-
-			for _, p := range existingPeers.Items {
-				if p.Spec.NodeSelector == nodeSelector {
-					key, value := getSelectorKeyValue(p.Spec.PeerSelector)
-
-					for _, nn := range nodeList {
-						for k, v := range nn.GetLabels() {
-							if key == k && value == v {
-								log.Infof("Reuse old route reflector as backup %s for %s", nn.GetName(), n.GetName())
-								toKeep[p.GetName()] = true
-								break
-							}
-						}
-					}
-				}
-			}
 		}
 	}
 
