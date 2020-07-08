@@ -69,10 +69,9 @@ func (t *MultiTopology) CalculateExpectedNumber(readyNodes int) int {
 }
 
 func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList) (toRefresh []calicoApi.BGPPeer, toDelete []calicoApi.BGPPeer) {
-
 	// Sorting RRs and Nodes for deterministic RR for Node selection
 	sort.Slice(routeReflectors, func(i, j int) bool {
-		return routeReflectors[i].GetName() < routeReflectors[j].GetName()
+		return routeReflectors[i].GetCreationTimestamp().UnixNano() < routeReflectors[j].GetCreationTimestamp().UnixNano()
 	})
 
 	nodeList := []*corev1.Node{}
@@ -80,7 +79,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 		nodeList = append(nodeList, n)
 	}
 	sort.Slice(nodeList, func(i, j int) bool {
-		return nodeList[i].GetName() < nodeList[j].GetName()
+		return nodeList[i].GetCreationTimestamp().UnixNano() < nodeList[j].GetCreationTimestamp().UnixNano()
 	})
 
 	rrConfig := findBGPPeer(existingPeers.Items, DefaultRouteReflectorMeshName)
@@ -107,7 +106,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 
 		toRefresh = append(toRefresh, *rrConfig)
 	} else {
-		toKeep[rrConfig.Name] = true
+		toKeep[rrConfig.GetName()] = true
 	}
 
 	peers := int(math.Min(float64(len(routeReflectors)), 3))
@@ -120,7 +119,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 	if t.Config.ZoneLabel != "" {
 		for i, rr := range routeReflectors {
 			rrZone := rr.GetLabels()[t.Config.ZoneLabel]
-			log.Debugf("RR:%s's zone: %s", rr.Name, rrZone)
+			log.Debugf("RR:%s's zone: %s", rr.GetName(), rrZone)
 			rrPerZone[rrZone] = append(rrPerZone[rrZone], &routeReflectors[i])
 		}
 	}
@@ -140,7 +139,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			// Select the 1st RR from the same zone if there're any
 			if len(rrPerZone[nodeZone]) > 0 {
 				rr := selectRRfromZone(rrIndexPerZone, rrPerZone, nodeZone)
-				log.Debugf("Adding %s as 1st RR for Node:%s", rr.Name, n.Name)
+				log.Debugf("Adding %s as 1st RR for Node:%s", rr.GetName(), n.GetName())
 				routeReflectorsForNode = append(routeReflectorsForNode, rr)
 			}
 
@@ -148,7 +147,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			for zone := range rrPerZone {
 				if zone != nodeZone {
 					rr := selectRRfromZone(rrIndexPerZone, rrPerZone, zone)
-					log.Debugf("Adding %s as 2nd RR for Node:%s", rr.Name, n.Name)
+					log.Debugf("Adding %s as 2nd RR for Node:%s", rr.GetName(), n.GetName())
 					routeReflectorsForNode = append(routeReflectorsForNode, rr)
 					break
 				}
@@ -169,48 +168,66 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			}
 		}
 
+		// TODO make configurable
+		nodeSelector := fmt.Sprintf("kubernetes.io/hostname=='%s'", n.GetLabels()["kubernetes.io/hostname"])
+
+		changed := 0
 		for _, rr := range routeReflectorsForNode {
 			rrID := getRouteReflectorID(string(rr.GetUID()))
 			name := fmt.Sprintf(DefaultRouteReflectorClientName+"-%s", rrID, n.GetUID())
 
 			clientConfig := findBGPPeer(existingPeers.Items, name)
 
-			// TODO make configurable
-			newNodeSelector := fmt.Sprintf("kubernetes.io/hostname=='%s'", n.GetLabels()["kubernetes.io/hostname"])
-			newPeerSelector := fmt.Sprintf("%s=='%d'", t.NodeLabelKey, rrID)
-
-			// Keep BGPPeer if nor NodeSelector nor PeerSelector changed
-			if clientConfig != nil && clientConfig.Spec.NodeSelector == newNodeSelector && clientConfig.Spec.PeerSelector == newPeerSelector {
-				toKeep[clientConfig.Name] = true
+			if clientConfig != nil {
+				toKeep[clientConfig.GetName()] = true
 				continue
 			}
 
-			if clientConfig == nil {
-				log.Debugf("New BGPPeers: %s", name)
-				clientConfig = &calicoApi.BGPPeer{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       calicoApi.KindBGPPeer,
-						APIVersion: calicoApi.GroupVersionCurrent,
-					},
-					ObjectMeta: metav1.ObjectMeta{
-						Name: name,
-					},
+			changed++
+
+			log.Debugf("New BGPPeers: %s", name)
+			clientConfig = &calicoApi.BGPPeer{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       calicoApi.KindBGPPeer,
+					APIVersion: calicoApi.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				Spec: calicoApi.BGPPeerSpec{
+					NodeSelector: nodeSelector,
+					PeerSelector: fmt.Sprintf("%s=='%d'", t.NodeLabelKey, rrID),
+				},
+			}
+
+			log.Debugf("Adding %s to the BGPPeers refresh list", clientConfig.GetName())
+			toRefresh = append(toRefresh, *clientConfig)
+		}
+
+		if changed == peers {
+			log.Info("All route reflectors are new for the node, let's try to give back an old one")
+
+			for _, p := range existingPeers.Items {
+				if p.Spec.NodeSelector == nodeSelector {
+					key, value := getSelectorKeyValue(p.Spec.PeerSelector)
+
+					for _, nn := range nodeList {
+						for k, v := range nn.GetLabels() {
+							if key == k && value == v {
+								log.Infof("Reuse old route reflector as backup %s for %s", nn.GetName(), n.GetName())
+								toKeep[p.GetName()] = true
+								break
+							}
+						}
+					}
 				}
 			}
-
-			clientConfig.Spec = calicoApi.BGPPeerSpec{
-				NodeSelector: newNodeSelector,
-				PeerSelector: newPeerSelector,
-			}
-
-			log.Debugf("Adding %s to the BGPPeers refresh list", clientConfig.Name)
-			toRefresh = append(toRefresh, *clientConfig)
 		}
 	}
 
 	for i := range existingPeers.Items {
-		if _, ok := toKeep[existingPeers.Items[i].Name]; !ok && findBGPPeer(toRefresh, existingPeers.Items[i].Name) == nil {
-			log.Debugf("Adding %s to the BGPPeers delete list", existingPeers.Items[i].Name)
+		if _, ok := toKeep[existingPeers.Items[i].GetName()]; !ok && findBGPPeer(toRefresh, existingPeers.Items[i].GetName()) == nil {
+			log.Debugf("Adding %s to the BGPPeers delete list", existingPeers.Items[i].GetName())
 			toDelete = append(toDelete, existingPeers.Items[i])
 		}
 	}
@@ -246,6 +263,15 @@ func getRouteReflectorID(nodeID string) uint32 {
 	h := fnv.New32a()
 	h.Write([]byte(nodeID))
 	return h.Sum32()
+}
+
+func getSelectorKeyValue(selector string) (string, string) {
+	keyValue := strings.Split(selector, "==")
+	if len(keyValue) == 1 {
+		keyValue[1] = ""
+	}
+
+	return keyValue[0], strings.Trim(keyValue[1], "'")
 }
 
 func NewMultiTopology(config Config) Topology {
