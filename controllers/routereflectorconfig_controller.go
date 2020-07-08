@@ -38,8 +38,6 @@ import (
 	"github.com/prometheus/common/log"
 )
 
-var routeReflectorsUnderOperation = map[types.UID]bool{}
-
 var notReadyTaints = map[string]bool{
 	"node.kubernetes.io/not-ready":                   false,
 	"node.kubernetes.io/unreachable":                 false,
@@ -55,7 +53,7 @@ var (
 	nodeNotFound    = ctrl.Result{}
 	nodeCleaned     = ctrl.Result{Requeue: true}
 	nodeReverted    = ctrl.Result{Requeue: true}
-	bgpPeersUpdated = ctrl.Result{Requeue: true}
+	bgpPeersUpdated = ctrl.Result{Requeue: true, RequeueAfter: time.Second}
 	finished        = ctrl.Result{}
 
 	nodeGetError          = ctrl.Result{}
@@ -69,6 +67,8 @@ var (
 	bgpPeerError          = ctrl.Result{}
 	bgpPeerRemoveError    = ctrl.Result{}
 )
+
+var routeReflectorsUnderOperation = map[types.UID]bool{}
 
 // RouteReflectorConfigReconciler reconciles a RouteReflectorConfig object
 type RouteReflectorConfigReconciler struct {
@@ -230,12 +230,12 @@ func (r *RouteReflectorConfigReconciler) updateBGPTopology(req ctrl.Request, nod
 
 	log.Debugf("Existing BGPeers are: %v", existingBGPPeers.Items)
 
-	toRefresh, toDelete := r.Topology.GenerateBGPPeers(rrList.Items, nodes, existingBGPPeers)
+	toRefresh, toRemove := r.Topology.GenerateBGPPeers(rrList.Items, nodes, existingBGPPeers)
 
 	log.Infof("Number of BGPPeers to refresh: %v", len(toRefresh))
 	log.Debugf("To refresh BGPeers are: %v", toRefresh)
-	log.Infof("Number of BGPPeers to delete: %v", len(toDelete))
-	log.Debugf("To delete BGPeers are: %v", toDelete)
+	log.Infof("Number of BGPPeers to delete: %v", len(toRemove))
+	log.Debugf("To delete BGPeers are: %v", toRemove)
 
 	for _, bp := range toRefresh {
 		log.Infof("Saving %s BGPPeer", bp.Name)
@@ -250,7 +250,7 @@ func (r *RouteReflectorConfigReconciler) updateBGPTopology(req ctrl.Request, nod
 		return bgpPeersUpdated, nil
 	}
 
-	for _, p := range toDelete {
+	for _, p := range toRemove {
 		log.Debugf("Removing BGPPeer: %s", p.GetName())
 		if err := r.BGPPeer.RemoveBGPPeer(&p); err != nil {
 			log.Errorf("Unable to remove BGPPeer because of %s", err.Error())

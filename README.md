@@ -83,7 +83,7 @@ $(cd config/default && kustomize edit add base ../manager/kdd) # for KDD
 ## Limitations
 
  * In the current implementation each reconcile loop fetches all nodes and all BGP peer configurations which could take too much time in large clusters.
- * Multi cluster topology rebalances the whole cluster on case of nodes are added. If you are unlicky it could drop all 3 route reflector sessions which chause 1-2 sec network outage.
+ * Multi cluster topology rebalances the whole cluster on case of nodes are removed. If you are unlicky and all 3 route reflectors of the node gone, 1-2 sec network outage should happen until it gets it's new ones.
  * Multi cluster topology generates 3 BGP peers per node, which can grow in large cluster. Would be better to create BGP peer configuration for each route reflector combination to decrease number of BGP peer configs. For example: `[1,2,3]`, `[1,2,4]`, `[2,3,4]`, `[1,3,4]`
 
 ## Roadmap
