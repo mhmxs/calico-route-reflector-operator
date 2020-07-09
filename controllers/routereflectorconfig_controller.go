@@ -100,6 +100,7 @@ func (r *RouteReflectorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Resul
 	res, err := r.reconcile(req)
 
 	if res.RequeueAfter != 0 {
+		log.Infof("Give some time to Calico and Bird to establish new topology: %d sec", int(res.RequeueAfter.Seconds()))
 		time.Sleep(res.RequeueAfter)
 		res.RequeueAfter = 0
 	}
@@ -136,11 +137,11 @@ func (r *RouteReflectorConfigReconciler) reconcile(req ctrl.Request) (ctrl.Resul
 	}
 	log.Debugf("Total number of nodes %d", len(nodeList.Items))
 
-	readyNodes, actualRRNumber, nodes := r.collectNodeInfo(nodeList.Items)
+	nodes := r.collectNodeInfo(nodeList.Items)
 
 	if res, err := r.revertFailedModification(req, nodes); isRequeNeeded(res, err) {
 		return res, err
-	} else if res, err := r.updateNodeLabels(req, readyNodes, actualRRNumber, nodes); isRequeNeeded(res, err) {
+	} else if res, err := r.updateNodeLabels(req, nodes); isRequeNeeded(res, err) {
 		return res, err
 	} else if res, err := r.updateBGPTopology(req, nodes); isRequeNeeded(res, err) {
 		return res, err
@@ -181,29 +182,41 @@ func (r *RouteReflectorConfigReconciler) revertFailedModification(req ctrl.Reque
 	return ctrl.Result{}, nil
 }
 
-func (r *RouteReflectorConfigReconciler) updateNodeLabels(req ctrl.Request, readyNodes int, actualRRNumber int, nodes map[*corev1.Node]bool) (ctrl.Result, error) {
-	expectedRRNumber := r.Topology.CalculateExpectedNumber(readyNodes)
-	log.Infof("Nodes Ready=%d, route-reflectors (healthy/expected) = %d/%d", readyNodes, actualRRNumber, expectedRRNumber)
+func (r *RouteReflectorConfigReconciler) updateNodeLabels(req ctrl.Request, nodes map[*corev1.Node]bool) (ctrl.Result, error) {
+	missingRouteReflectors := 0
 
-	for n, isReady := range nodes {
-		if !isReady || expectedRRNumber == actualRRNumber {
-			continue
+	for _, status := range r.Topology.GetRouteReflectorStatuses(nodes) {
+		status.ExpectedRRs += missingRouteReflectors
+		log.Infof("Route refletor status in zone(s) %v (actual/expected) = %d/%d", status.Zones, status.ActualRRs, status.ExpectedRRs)
+
+		for _, n := range status.Nodes {
+			isReady := nodes[n]
+			if !isReady {
+				continue
+			} else if status.ExpectedRRs == status.ActualRRs {
+				break
+			}
+
+			if diff := status.ExpectedRRs - status.ActualRRs; diff != 0 {
+				if updated, err := r.updateRRStatus(n, diff); err != nil {
+					log.Errorf("Unable to update node %s because of %s", n.GetName(), err.Error())
+					return nodeUpdateError, err
+				} else if updated && diff > 0 {
+					status.ActualRRs++
+				} else if updated && diff < 0 {
+					status.ActualRRs--
+				}
+			}
 		}
 
-		if diff := expectedRRNumber - actualRRNumber; diff != 0 {
-			if updated, err := r.updateRRStatus(n, diff); err != nil {
-				log.Errorf("Unable to update node %s because of %s", n.GetName(), err.Error())
-				return nodeUpdateError, err
-			} else if updated && diff > 0 {
-				actualRRNumber++
-			} else if updated && diff < 0 {
-				actualRRNumber--
-			}
+		if status.ExpectedRRs != status.ActualRRs {
+			log.Infof("Actual number %d is different than expected %d", status.ActualRRs, status.ExpectedRRs)
+			missingRouteReflectors = status.ExpectedRRs - status.ActualRRs
 		}
 	}
 
-	if expectedRRNumber != actualRRNumber {
-		log.Errorf("Actual number %d is different than expected %d", actualRRNumber, expectedRRNumber)
+	if missingRouteReflectors != 0 {
+		log.Errorf("Actual number is different than expected, missing: %d", missingRouteReflectors)
 	}
 
 	return ctrl.Result{}, nil
@@ -305,19 +318,11 @@ func (r *RouteReflectorConfigReconciler) updateRRStatus(node *corev1.Node, diff 
 	return true, nil
 }
 
-func (r *RouteReflectorConfigReconciler) collectNodeInfo(allNodes []corev1.Node) (readyNodes int, actualReadyNumber int, filtered map[*corev1.Node]bool) {
+func (r *RouteReflectorConfigReconciler) collectNodeInfo(allNodes []corev1.Node) (filtered map[*corev1.Node]bool) {
 	filtered = map[*corev1.Node]bool{}
 
 	for i, n := range allNodes {
-		isOK := isNodeReady(&n) && isNodeSchedulable(&n) && r.isNodeCompatible(&n)
-
-		filtered[&allNodes[i]] = isOK
-		if isOK {
-			readyNodes++
-			if r.Topology.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
-				actualReadyNumber++
-			}
-		}
+		filtered[&allNodes[i]] = isNodeReady(&n) && isNodeSchedulable(&n) && r.isNodeCompatible(&n)
 	}
 
 	return

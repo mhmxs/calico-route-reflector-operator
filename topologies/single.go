@@ -18,6 +18,7 @@ package topologies
 import (
 	"fmt"
 	"math"
+	"sort"
 
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	corev1 "k8s.io/api/core/v1"
@@ -64,13 +65,40 @@ func (t *SingleTopology) NewNodeListOptions(nodeLabels map[string]string) client
 	return listOptions
 }
 
-func (t *SingleTopology) CalculateExpectedNumber(readyNodes int) int {
-	exp := math.Round(float64(readyNodes) * t.Ration)
-	exp = math.Max(exp, float64(t.Min))
-	exp = math.Min(exp, float64(t.Max))
-	exp = math.Min(exp, float64(readyNodes))
-	exp = math.RoundToEven(exp)
-	return int(exp)
+func (t *SingleTopology) GetRouteReflectorStatuses(nodes map[*corev1.Node]bool) []RouteReflectorStatus {
+	zones := map[string]bool{}
+	sorted := []*corev1.Node{}
+	for n := range nodes {
+		zones[n.GetLabels()[t.ZoneLabel]] = true
+		sorted = append(sorted, n)
+	}
+
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].GetCreationTimestamp().UnixNano() < sorted[j].GetCreationTimestamp().UnixNano()
+	})
+
+	status := RouteReflectorStatus{
+		Zones: []string{},
+		Nodes: sorted,
+	}
+
+	for z := range zones {
+		status.Zones = append(status.Zones, z)
+	}
+
+	readyNodes := 0
+	for _, n := range sorted {
+		if nodes[n] {
+			readyNodes++
+			if t.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
+				status.ActualRRs++
+			}
+		}
+	}
+
+	status.ExpectedRRs = t.calculateExpectedNumber(readyNodes)
+
+	return []RouteReflectorStatus{status}
 }
 
 func (t *SingleTopology) GenerateBGPPeers(_ []corev1.Node, _ map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList) ([]calicoApi.BGPPeer, []calicoApi.BGPPeer) {
@@ -119,6 +147,15 @@ func (t *SingleTopology) GenerateBGPPeers(_ []corev1.Node, _ map[*corev1.Node]bo
 	bgpPeerConfigs = append(bgpPeerConfigs, *clientConfig)
 
 	return bgpPeerConfigs, []calicoApi.BGPPeer{}
+}
+
+func (t *SingleTopology) calculateExpectedNumber(readyNodes int) int {
+	exp := math.Ceil(float64(readyNodes) * t.Ration)
+	exp = math.Max(exp, float64(t.Min))
+	exp = math.Min(exp, float64(t.Max))
+	exp = math.Min(exp, float64(readyNodes))
+	exp = math.RoundToEven(exp)
+	return int(exp)
 }
 
 func NewSingleTopology(config Config) Topology {

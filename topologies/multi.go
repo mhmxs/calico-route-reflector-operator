@@ -64,8 +64,35 @@ func (t *MultiTopology) NewNodeListOptions(nodeLabels map[string]string) client.
 	return client.ListOptions{}
 }
 
-func (t *MultiTopology) CalculateExpectedNumber(readyNodes int) int {
-	return t.single.CalculateExpectedNumber(readyNodes)
+func (t *MultiTopology) GetRouteReflectorStatuses(nodes map[*corev1.Node]bool) (statuses []RouteReflectorStatus) {
+	readyNodes := 0
+	perZone := map[string]map[*corev1.Node]bool{}
+	for n, isReady := range nodes {
+		if isReady {
+			readyNodes++
+		}
+
+		zone := n.GetLabels()[t.ZoneLabel]
+		if _, ok := perZone[zone]; !ok {
+			perZone[zone] = map[*corev1.Node]bool{}
+		}
+		perZone[zone][n] = nodes[n]
+	}
+
+	expRRs := t.single.calculateExpectedNumber(readyNodes)
+	expRRsPerZone := int(math.Ceil(float64(expRRs) / float64(len(perZone))))
+
+	for _, zoneNodes := range perZone {
+		status := t.single.GetRouteReflectorStatuses(zoneNodes)[0]
+		status.ExpectedRRs = expRRsPerZone
+		statuses = append(statuses, status)
+	}
+
+	sort.Slice(statuses, func(i, j int) bool {
+		return len(statuses[i].Nodes) < len(statuses[j].Nodes)
+	})
+
+	return
 }
 
 func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList) (toRefresh []calicoApi.BGPPeer, toDelete []calicoApi.BGPPeer) {
@@ -109,6 +136,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 		toKeep[rrConfig.GetName()] = true
 	}
 
+	// TODO make it configurable
 	peers := int(math.Min(float64(len(routeReflectors)), 3))
 
 	rrIndex := -1
