@@ -294,20 +294,27 @@ func (r *RouteReflectorConfigReconciler) removeRRStatus(req ctrl.Request, node *
 }
 
 func (r *RouteReflectorConfigReconciler) updateRRStatus(node *corev1.Node, diff int) (bool, error) {
-	if labeled := r.Topology.IsRouteReflector(string(node.GetUID()), node.GetLabels()); labeled && diff < 0 {
-		return true, r.Datastore.RemoveRRStatus(node)
-	} else if labeled || diff <= 0 {
+	labeled := r.Topology.IsRouteReflector(string(node.GetUID()), node.GetLabels())
+	if labeled && diff > 0 || !labeled && diff < 0 {
 		return false, nil
 	}
 
 	routeReflectorsUnderOperation[node.GetUID()] = true
 
+	if diff < 0 {
+		if err := r.Datastore.RemoveRRStatus(node); err != nil {
+			log.Errorf("Unable to delete RR status %s because of %s", node.GetName(), err.Error())
+			return false, err
+		}
+		log.Infof("Removing route reflector label to %s", node.GetName())
+	} else {
 	if err := r.Datastore.AddRRStatus(node); err != nil {
 		log.Errorf("Unable to add RR status %s because of %s", node.GetName(), err.Error())
 		return false, err
 	}
+		log.Infof("Adding route reflector label to %s", node.GetName())
+	}
 
-	log.Infof("Adding route reflector label to %s", node.GetName())
 	if err := r.Client.Update(context.Background(), node); err != nil {
 		log.Errorf("Unable to update node %s because of %s", node.GetName(), err.Error())
 		return false, err
