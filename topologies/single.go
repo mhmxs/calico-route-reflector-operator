@@ -77,26 +77,17 @@ func (t *SingleTopology) GetRouteReflectorStatuses(nodes map[*corev1.Node]bool) 
 		return sorted[i].GetCreationTimestamp().UnixNano() < sorted[j].GetCreationTimestamp().UnixNano()
 	})
 
+	readyNodes, actualRRs := collectNodeInfo(t, nodes)
+
 	status := RouteReflectorStatus{
-		Zones: []string{},
-		Nodes: sorted,
+		ActualRRs:   actualRRs,
+		ExpectedRRs: t.calculateExpectedNumber(readyNodes),
+		Nodes:       sorted,
 	}
 
 	for z := range zones {
 		status.Zones = append(status.Zones, z)
 	}
-
-	readyNodes := 0
-	for _, n := range sorted {
-		if nodes[n] {
-			readyNodes++
-			if t.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
-				status.ActualRRs++
-			}
-		}
-	}
-
-	status.ExpectedRRs = t.calculateExpectedNumber(readyNodes)
 
 	return []RouteReflectorStatus{status}
 }

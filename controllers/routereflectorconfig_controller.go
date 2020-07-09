@@ -308,10 +308,10 @@ func (r *RouteReflectorConfigReconciler) updateRRStatus(node *corev1.Node, diff 
 		}
 		log.Infof("Removing route reflector label to %s", node.GetName())
 	} else {
-	if err := r.Datastore.AddRRStatus(node); err != nil {
-		log.Errorf("Unable to add RR status %s because of %s", node.GetName(), err.Error())
-		return false, err
-	}
+		if err := r.Datastore.AddRRStatus(node); err != nil {
+			log.Errorf("Unable to add RR status %s because of %s", node.GetName(), err.Error())
+			return false, err
+		}
 		log.Infof("Adding route reflector label to %s", node.GetName())
 	}
 
