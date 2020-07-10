@@ -19,6 +19,7 @@ package topologies
 import (
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -52,6 +53,18 @@ type Config struct {
 	Min            int
 	Max            int
 	Ration         float64
+}
+
+func generateBGPPeerStub(name string) *calicoApi.BGPPeer {
+	return &calicoApi.BGPPeer{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       calicoApi.KindBGPPeer,
+			APIVersion: calicoApi.GroupVersionCurrent,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
 }
 
 func findBGPPeer(peers []calicoApi.BGPPeer, name string) *calicoApi.BGPPeer {

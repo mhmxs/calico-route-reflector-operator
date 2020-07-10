@@ -25,7 +25,6 @@ import (
 
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/prometheus/common/log"
@@ -117,15 +116,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 	rrConfig := findBGPPeer(existingPeers.Items, DefaultRouteReflectorMeshName)
 	if rrConfig == nil {
 		log.Debugf("Creating new RR full-mesh BGPPeers: %s", DefaultRouteReflectorMeshName)
-		rrConfig = &calicoApi.BGPPeer{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       calicoApi.KindBGPPeer,
-				APIVersion: calicoApi.GroupVersionCurrent,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name: DefaultRouteReflectorMeshName,
-			},
-		}
+		rrConfig = generateBGPPeerStub(DefaultRouteReflectorMeshName)
 	}
 
 	toKeep := map[string]bool{}
@@ -222,18 +213,10 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			}
 
 			log.Debugf("New BGPPeers: %s", name)
-			clientConfig = &calicoApi.BGPPeer{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       calicoApi.KindBGPPeer,
-					APIVersion: calicoApi.GroupVersionCurrent,
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: name,
-				},
-				Spec: calicoApi.BGPPeerSpec{
-					NodeSelector: nodeSelector,
-					PeerSelector: fmt.Sprintf("%s=='%d'", t.NodeLabelKey, rrID),
-				},
+			clientConfig = generateBGPPeerStub(name)
+			clientConfig.Spec = calicoApi.BGPPeerSpec{
+				NodeSelector: nodeSelector,
+				PeerSelector: fmt.Sprintf("%s=='%d'", t.NodeLabelKey, rrID),
 			}
 
 			log.Debugf("Adding %s to the BGPPeers refresh list", clientConfig.GetName())

@@ -22,7 +22,6 @@ import (
 
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -95,18 +94,9 @@ func (t *SingleTopology) GetRouteReflectorStatuses(nodes map[*corev1.Node]bool) 
 func (t *SingleTopology) GenerateBGPPeers(_ []corev1.Node, _ map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList) ([]calicoApi.BGPPeer, []calicoApi.BGPPeer) {
 	bgpPeerConfigs := []calicoApi.BGPPeer{}
 
-	// TODO eliminate code duplication
 	rrConfig := findBGPPeer(existingPeers.Items, DefaultRouteReflectorMeshName)
 	if rrConfig == nil {
-		rrConfig = &calicoApi.BGPPeer{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       calicoApi.KindBGPPeer,
-				APIVersion: calicoApi.GroupVersionCurrent,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name: DefaultRouteReflectorMeshName,
-			},
-		}
+		rrConfig = generateBGPPeerStub(DefaultRouteReflectorMeshName)
 	}
 	selector := fmt.Sprintf("has(%s)", t.NodeLabelKey)
 	rrConfig.Spec = calicoApi.BGPPeerSpec{
@@ -120,15 +110,7 @@ func (t *SingleTopology) GenerateBGPPeers(_ []corev1.Node, _ map[*corev1.Node]bo
 
 	clientConfig := findBGPPeer(existingPeers.Items, clientConfigName)
 	if clientConfig == nil {
-		clientConfig = &calicoApi.BGPPeer{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       calicoApi.KindBGPPeer,
-				APIVersion: calicoApi.GroupVersionCurrent,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name: clientConfigName,
-			},
-		}
+		clientConfig = generateBGPPeerStub(clientConfigName)
 	}
 	clientConfig.Spec = calicoApi.BGPPeerSpec{
 		NodeSelector: "!" + selector,
