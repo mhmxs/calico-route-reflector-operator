@@ -146,6 +146,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 
 	rrIndex := -1
 	rrIndexPerZone := map[string]int{}
+	zones := []string{}
 	rrPerZone := map[string][]*corev1.Node{}
 
 	// Creat per zone RR lists for MZR selection
@@ -155,6 +156,11 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			log.Debugf("RR:%s's zone: %s", rr.GetName(), rrZone)
 			rrPerZone[rrZone] = append(rrPerZone[rrZone], &routeReflectors[i])
 		}
+
+		for zone := range rrPerZone {
+			zones = append(zones, zone)
+		}
+		sort.Strings(zones)
 	}
 
 	for _, n := range nodeList {
@@ -177,7 +183,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			}
 
 			// Select the 2nd RR from a different zone
-			for zone := range rrPerZone {
+			for _, zone := range zones {
 				if zone != nodeZone {
 					rr := selectRRfromZone(rrIndexPerZone, rrPerZone, zone)
 					log.Debugf("Adding %s as 2nd RR for Node:%s", rr.GetName(), n.GetName())
