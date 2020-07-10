@@ -25,7 +25,6 @@ import (
 
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/prometheus/common/log"
@@ -64,8 +63,40 @@ func (t *MultiTopology) NewNodeListOptions(nodeLabels map[string]string) client.
 	return client.ListOptions{}
 }
 
-func (t *MultiTopology) CalculateExpectedNumber(readyNodes int) int {
-	return t.single.CalculateExpectedNumber(readyNodes)
+func (t *MultiTopology) GetRouteReflectorStatuses(nodes map[*corev1.Node]bool) (statuses []RouteReflectorStatus) {
+	readyNodes := 0
+	perZone := map[string]map[*corev1.Node]bool{}
+	for n, isReady := range nodes {
+		if isReady {
+			readyNodes++
+		}
+
+		zone := n.GetLabels()[t.ZoneLabel]
+		if _, ok := perZone[zone]; !ok {
+			perZone[zone] = map[*corev1.Node]bool{}
+		}
+		perZone[zone][n] = nodes[n]
+	}
+
+	expRRs := t.single.calculateExpectedNumber(readyNodes)
+	expRRsPerZone := int(math.Ceil(float64(expRRs) / float64(len(perZone))))
+
+	for _, zoneNodes := range perZone {
+		status := t.single.GetRouteReflectorStatuses(zoneNodes)[0]
+
+		// TODO On this way it collects info in single and multi too twice
+		_, actualRRs := collectNodeInfo(t, zoneNodes)
+		status.ActualRRs = actualRRs
+		status.ExpectedRRs = expRRsPerZone
+
+		statuses = append(statuses, status)
+	}
+
+	sort.Slice(statuses, func(i, j int) bool {
+		return len(statuses[i].Nodes) < len(statuses[j].Nodes)
+	})
+
+	return
 }
 
 func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes map[*corev1.Node]bool, existingPeers *calicoApi.BGPPeerList) (toRefresh []calicoApi.BGPPeer, toDelete []calicoApi.BGPPeer) {
@@ -85,15 +116,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 	rrConfig := findBGPPeer(existingPeers.Items, DefaultRouteReflectorMeshName)
 	if rrConfig == nil {
 		log.Debugf("Creating new RR full-mesh BGPPeers: %s", DefaultRouteReflectorMeshName)
-		rrConfig = &calicoApi.BGPPeer{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       calicoApi.KindBGPPeer,
-				APIVersion: calicoApi.GroupVersionCurrent,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name: DefaultRouteReflectorMeshName,
-			},
-		}
+		rrConfig = generateBGPPeerStub(DefaultRouteReflectorMeshName)
 	}
 
 	toKeep := map[string]bool{}
@@ -109,10 +132,12 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 		toKeep[rrConfig.GetName()] = true
 	}
 
+	// TODO make it configurable
 	peers := int(math.Min(float64(len(routeReflectors)), 3))
 
 	rrIndex := -1
 	rrIndexPerZone := map[string]int{}
+	zones := []string{}
 	rrPerZone := map[string][]*corev1.Node{}
 
 	// Creat per zone RR lists for MZR selection
@@ -122,6 +147,11 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			log.Debugf("RR:%s's zone: %s", rr.GetName(), rrZone)
 			rrPerZone[rrZone] = append(rrPerZone[rrZone], &routeReflectors[i])
 		}
+
+		for zone := range rrPerZone {
+			zones = append(zones, zone)
+		}
+		sort.Strings(zones)
 	}
 
 	for _, n := range nodeList {
@@ -144,7 +174,7 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			}
 
 			// Select the 2nd RR from a different zone
-			for zone := range rrPerZone {
+			for _, zone := range zones {
 				if zone != nodeZone {
 					rr := selectRRfromZone(rrIndexPerZone, rrPerZone, zone)
 					log.Debugf("Adding %s as 2nd RR for Node:%s", rr.GetName(), n.GetName())
@@ -183,18 +213,10 @@ func (t *MultiTopology) GenerateBGPPeers(routeReflectors []corev1.Node, nodes ma
 			}
 
 			log.Debugf("New BGPPeers: %s", name)
-			clientConfig = &calicoApi.BGPPeer{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       calicoApi.KindBGPPeer,
-					APIVersion: calicoApi.GroupVersionCurrent,
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: name,
-				},
-				Spec: calicoApi.BGPPeerSpec{
-					NodeSelector: nodeSelector,
-					PeerSelector: fmt.Sprintf("%s=='%d'", t.NodeLabelKey, rrID),
-				},
+			clientConfig = generateBGPPeerStub(name)
+			clientConfig.Spec = calicoApi.BGPPeerSpec{
+				NodeSelector: nodeSelector,
+				PeerSelector: fmt.Sprintf("%s=='%d'", t.NodeLabelKey, rrID),
 			}
 
 			log.Debugf("Adding %s to the BGPPeers refresh list", clientConfig.GetName())

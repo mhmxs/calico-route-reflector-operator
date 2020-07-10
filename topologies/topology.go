@@ -19,6 +19,7 @@ package topologies
 import (
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -28,12 +29,19 @@ const (
 	DefaultRouteReflectorClientName = "peer-to-rrs-%d"
 )
 
+type RouteReflectorStatus struct {
+	Zones       []string
+	ActualRRs   int
+	ExpectedRRs int
+	Nodes       []*corev1.Node
+}
+
 type Topology interface {
 	IsRouteReflector(string, map[string]string) bool
 	GetClusterID(string, int64) string
 	GetNodeLabel(string) (string, string)
 	NewNodeListOptions(labels map[string]string) client.ListOptions
-	CalculateExpectedNumber(int) int
+	GetRouteReflectorStatuses(map[*corev1.Node]bool) []RouteReflectorStatus
 	GenerateBGPPeers([]corev1.Node, map[*corev1.Node]bool, *calicoApi.BGPPeerList) ([]calicoApi.BGPPeer, []calicoApi.BGPPeer)
 }
 
@@ -47,6 +55,18 @@ type Config struct {
 	Ration         float64
 }
 
+func generateBGPPeerStub(name string) *calicoApi.BGPPeer {
+	return &calicoApi.BGPPeer{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       calicoApi.KindBGPPeer,
+			APIVersion: calicoApi.GroupVersionCurrent,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+}
+
 func findBGPPeer(peers []calicoApi.BGPPeer, name string) *calicoApi.BGPPeer {
 	for _, p := range peers {
 		if p.GetName() == name {
@@ -55,4 +75,17 @@ func findBGPPeer(peers []calicoApi.BGPPeer, name string) *calicoApi.BGPPeer {
 	}
 
 	return nil
+}
+
+func collectNodeInfo(t Topology, nodes map[*corev1.Node]bool) (readyNodes, actualRRs int) {
+	for n, isReady := range nodes {
+		if isReady {
+			readyNodes++
+			if t.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
+				actualRRs++
+			}
+		}
+	}
+
+	return
 }
