@@ -77,11 +77,11 @@ func findBGPPeer(peers []calicoApi.BGPPeer, name string) *calicoApi.BGPPeer {
 	return nil
 }
 
-func collectNodeInfo(t Topology, nodes map[*corev1.Node]bool) (readyNodes, actualRRs int) {
+func collectNodeInfo(isRouteReflector func(string, map[string]string) bool, nodes map[*corev1.Node]bool) (readyNodes, actualRRs int) {
 	for n, isReady := range nodes {
 		if isReady {
 			readyNodes++
-			if t.IsRouteReflector(string(n.GetUID()), n.GetLabels()) {
+			if isRouteReflector(string(n.GetUID()), n.GetLabels()) {
 				actualRRs++
 			}
 		}

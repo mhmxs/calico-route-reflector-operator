@@ -85,7 +85,7 @@ func (t *MultiTopology) GetRouteReflectorStatuses(nodes map[*corev1.Node]bool) (
 		status := t.single.GetRouteReflectorStatuses(zoneNodes)[0]
 
 		// TODO On this way it collects info in single and multi too twice
-		_, actualRRs := collectNodeInfo(t, zoneNodes)
+		_, actualRRs := collectNodeInfo(t.IsRouteReflector, zoneNodes)
 		status.ActualRRs = actualRRs
 		status.ExpectedRRs = expRRsPerZone
 
