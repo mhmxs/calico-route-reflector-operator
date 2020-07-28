@@ -25,23 +25,29 @@ import (
 	"github.com/prometheus/common/log"
 )
 
-type BGPPeer struct {
-	CalicoClient calicoClient.Interface
+type BGPPeer interface {
+	ListBGPPeers() (*calicoApi.BGPPeerList, error)
+	SaveBGPPeer(*calicoApi.BGPPeer) error
+	RemoveBGPPeer(*calicoApi.BGPPeer) error
 }
 
-func (b *BGPPeer) ListBGPPeers() (*calicoApi.BGPPeerList, error) {
-	return b.CalicoClient.BGPPeers().List(context.Background(), options.ListOptions{})
+type bgpPeerImpl struct {
+	calicoClient calicoClient.Interface
 }
 
-func (b *BGPPeer) SaveBGPPeer(peer *calicoApi.BGPPeer) error {
+func (b *bgpPeerImpl) ListBGPPeers() (*calicoApi.BGPPeerList, error) {
+	return b.calicoClient.BGPPeers().List(context.Background(), options.ListOptions{})
+}
+
+func (b *bgpPeerImpl) SaveBGPPeer(peer *calicoApi.BGPPeer) error {
 	if peer.GetUID() == "" {
 		log.Debugf("Creating new BGPPeers: %s", peer.Name)
-		if _, err := b.CalicoClient.BGPPeers().Create(context.Background(), peer, options.SetOptions{}); err != nil {
+		if _, err := b.calicoClient.BGPPeers().Create(context.Background(), peer, options.SetOptions{}); err != nil {
 			return err
 		}
 	} else {
 		log.Debugf("Updating existing BGPPeers: %s", peer.Name)
-		if _, err := b.CalicoClient.BGPPeers().Update(context.Background(), peer, options.SetOptions{}); err != nil {
+		if _, err := b.calicoClient.BGPPeers().Update(context.Background(), peer, options.SetOptions{}); err != nil {
 			return err
 		}
 	}
@@ -49,13 +55,13 @@ func (b *BGPPeer) SaveBGPPeer(peer *calicoApi.BGPPeer) error {
 	return nil
 }
 
-func (b *BGPPeer) RemoveBGPPeer(peer *calicoApi.BGPPeer) error {
-	_, err := b.CalicoClient.BGPPeers().Delete(context.Background(), peer.GetName(), options.DeleteOptions{})
+func (b *bgpPeerImpl) RemoveBGPPeer(peer *calicoApi.BGPPeer) error {
+	_, err := b.calicoClient.BGPPeers().Delete(context.Background(), peer.GetName(), options.DeleteOptions{})
 	return err
 }
 
-func NewBGPPeer(calicoClient calicoClient.Interface) *BGPPeer {
-	return &BGPPeer{
-		CalicoClient: calicoClient,
+func NewBGPPeer(calicoClient calicoClient.Interface) BGPPeer {
+	return &bgpPeerImpl{
+		calicoClient: calicoClient,
 	}
 }
