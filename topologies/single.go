@@ -76,7 +76,7 @@ func (t *SingleTopology) GetRouteReflectorStatuses(nodes map[*corev1.Node]bool) 
 		return sorted[i].GetCreationTimestamp().UnixNano() < sorted[j].GetCreationTimestamp().UnixNano()
 	})
 
-	readyNodes, actualRRs := collectNodeInfo(t, nodes)
+	readyNodes, actualRRs := collectNodeInfo(t.IsRouteReflector, nodes)
 
 	status := RouteReflectorStatus{
 		ActualRRs:   actualRRs,
