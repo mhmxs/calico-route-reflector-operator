@@ -161,9 +161,7 @@ func main() {
 		IncompatibleLabels: incompatibleLabels,
 		Topology:           topology,
 		Datastore:          datastore,
-		BGPPeer: bgppeer.BGPPeer{
-			CalicoClient: calicoClient,
-		},
+		BGPPeer:            bgppeer.NewBGPPeer(calicoClient),
 	}).SetupWithManager(mgr, time.Duration(waitTimeout)*time.Second); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RouteReflectorConfig")
 		panic(err)

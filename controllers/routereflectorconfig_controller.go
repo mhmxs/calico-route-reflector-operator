@@ -24,7 +24,6 @@ import (
 	"github.com/mhmxs/calico-route-reflector-operator/bgppeer"
 	"github.com/mhmxs/calico-route-reflector-operator/datastores"
 	"github.com/mhmxs/calico-route-reflector-operator/topologies"
-	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,8 +31,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-
-	calicoClient "github.com/projectcalico/libcalico-go/lib/clientv3"
 
 	"github.com/prometheus/common/log"
 )
@@ -72,8 +69,7 @@ var routeReflectorsUnderOperation = map[types.UID]bool{}
 
 // RouteReflectorConfigReconciler reconciles a RouteReflectorConfig object
 type RouteReflectorConfigReconciler struct {
-	client.Client
-	CalicoClient       calicoClient.Interface
+	Client
 	Log                logr.Logger
 	Scheme             *runtime.Scheme
 	NodeLabelKey       string
@@ -83,7 +79,7 @@ type RouteReflectorConfigReconciler struct {
 	BGPPeer            bgppeer.BGPPeer
 }
 
-type reconcileImplClient interface {
+type Client interface {
 	Get(context.Context, client.ObjectKey, runtime.Object) error
 	Update(context.Context, runtime.Object, ...client.UpdateOption) error
 	List(context.Context, runtime.Object, ...client.ListOption) error
@@ -335,6 +331,10 @@ func (r *RouteReflectorConfigReconciler) collectNodeInfo(allNodes []corev1.Node)
 	return
 }
 
+func isRequeNeeded(res ctrl.Result, err error) bool {
+	return res.Requeue || res.RequeueAfter != 0 || err != nil
+}
+
 func (r *RouteReflectorConfigReconciler) isNodeCompatible(node *corev1.Node) bool {
 	for k, v := range node.GetLabels() {
 		if iv, ok := r.IncompatibleLabels[k]; ok && (iv == nil || *iv == v) {
@@ -343,10 +343,6 @@ func (r *RouteReflectorConfigReconciler) isNodeCompatible(node *corev1.Node) boo
 	}
 
 	return true
-}
-
-func isRequeNeeded(res ctrl.Result, err error) bool {
-	return res.Requeue || res.RequeueAfter != 0 || err != nil
 }
 
 func isNodeReady(node *corev1.Node) bool {
@@ -370,16 +366,6 @@ func isNodeSchedulable(node *corev1.Node) bool {
 	}
 
 	return true
-}
-
-func findBGPPeer(peers []calicoApi.BGPPeer, name string) bool {
-	for _, p := range peers {
-		if p.GetName() == name {
-			return true
-		}
-	}
-
-	return false
 }
 
 type eventFilter struct{}
