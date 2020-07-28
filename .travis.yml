@@ -25,3 +25,6 @@ script:
   - kustomize build config/crd
   - $(cd config/default && kustomize edit add base ../manager)
   - kustomize build config/default
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
