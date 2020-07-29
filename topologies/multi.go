@@ -264,15 +264,6 @@ func getRouteReflectorID(nodeID string) uint32 {
 	return h.Sum32()
 }
 
-func getSelectorKeyValue(selector string) (string, string) {
-	keyValue := strings.Split(selector, "==")
-	if len(keyValue) == 1 {
-		keyValue[1] = ""
-	}
-
-	return keyValue[0], strings.Trim(keyValue[1], "'")
-}
-
 func NewMultiTopology(config Config) Topology {
 	t := &MultiTopology{
 		Config: config,

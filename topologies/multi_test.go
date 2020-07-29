@@ -18,6 +18,7 @@ package topologies
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	corev1 "k8s.io/api/core/v1"
@@ -300,6 +301,8 @@ func TestGetRouteReflectorStatuses(t *testing.T) {
 }
 
 func TestGenerateBGPPeers(t *testing.T) {
+	now := time.Now()
+
 	data := []struct {
 		routeReflectors []corev1.Node
 		nodes           map[*corev1.Node]bool
@@ -564,8 +567,9 @@ func TestGenerateBGPPeers(t *testing.T) {
 			[]corev1.Node{
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "rr",
-						UID:  "uid",
+						Name:              "rr",
+						CreationTimestamp: metav1.NewTime(now),
+						UID:               "uid",
 						Labels: map[string]string{
 							"zone": "a",
 						},
@@ -573,8 +577,9 @@ func TestGenerateBGPPeers(t *testing.T) {
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "rr2",
-						UID:  "rr2",
+						Name:              "rr2",
+						CreationTimestamp: metav1.NewTime(now.Add(time.Second)),
+						UID:               "rr2",
 						Labels: map[string]string{
 							"zone": "b",
 						},
@@ -582,8 +587,9 @@ func TestGenerateBGPPeers(t *testing.T) {
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "rr3",
-						UID:  "rr3",
+						Name:              "rr3",
+						CreationTimestamp: metav1.NewTime(now.Add(2 * time.Second)),
+						UID:               "rr3",
 						Labels: map[string]string{
 							"zone": "a",
 						},
@@ -593,7 +599,8 @@ func TestGenerateBGPPeers(t *testing.T) {
 			map[*corev1.Node]bool{
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						UID: "uid",
+						CreationTimestamp: metav1.NewTime(now),
+						UID:               "uid",
 						Labels: map[string]string{
 							"zone":                   "a",
 							"kubernetes.io/hostname": "node",
@@ -602,7 +609,8 @@ func TestGenerateBGPPeers(t *testing.T) {
 				}: true,
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						UID: "uid2",
+						CreationTimestamp: metav1.NewTime(now.Add(time.Second)),
+						UID:               "uid2",
 						Labels: map[string]string{
 							"zone":                   "b",
 							"kubernetes.io/hostname": "node2",
