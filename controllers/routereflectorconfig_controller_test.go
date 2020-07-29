@@ -913,6 +913,20 @@ func TestReconcileUpscale(t *testing.T) {
 	nodes := []corev1.Node{
 		{
 			ObjectMeta: metav1.ObjectMeta{
+				UID:    "rr",
+				Labels: map[string]string{"rr": "0"},
+			},
+			Status: corev1.NodeStatus{
+				Conditions: []corev1.NodeCondition{
+					{
+						Type:   corev1.NodeReady,
+						Status: "True",
+					},
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
 				UID: "uid",
 			},
 			Status: corev1.NodeStatus{
@@ -926,6 +940,7 @@ func TestReconcileUpscale(t *testing.T) {
 		},
 	}
 
+	addCalled := 0
 	rrcr := RouteReflectorConfigReconciler{
 		NodeLabelKey: "rr",
 		Client: mockClient{
@@ -933,11 +948,14 @@ func TestReconcileUpscale(t *testing.T) {
 			listResult: nodes,
 		},
 		Topology: mockTopology{
+			isRouteReflector: func(UID string) bool {
+				return UID == "rr"
+			},
 			getRouteReflectorStatuses: func(nodes map[*corev1.Node]bool) []topologies.RouteReflectorStatus {
 				return []topologies.RouteReflectorStatus{
 					{
 						Zones:       []string{"zone"},
-						ActualRRs:   0,
+						ActualRRs:   1,
 						ExpectedRRs: 2,
 						Nodes:       getNodeKeys(nodes),
 					},
@@ -947,7 +965,12 @@ func TestReconcileUpscale(t *testing.T) {
 				return
 			},
 		},
-		Datastore: mockDatastore{},
+		Datastore: mockDatastore{
+			addRRStatus: func() error {
+				addCalled++
+				return nil
+			},
+		},
 		BGPPeer: mockBGPPeer{
 			listBGPPeers: func() (*calicoApi.BGPPeerList, error) {
 				return &calicoApi.BGPPeerList{}, nil
@@ -963,13 +986,29 @@ func TestReconcileUpscale(t *testing.T) {
 	if res != finished {
 		t.Error("Wrong exit response not finished")
 	}
+	if addCalled != 1 {
+		t.Errorf("Add was called not exactly once %d", addCalled)
+	}
 }
 
 func TestReconcileDownscale(t *testing.T) {
 	nodes := []corev1.Node{
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				UID:    "uid",
+				UID: "uid",
+			},
+			Status: corev1.NodeStatus{
+				Conditions: []corev1.NodeCondition{
+					{
+						Type:   corev1.NodeReady,
+						Status: "True",
+					},
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				UID:    "rr",
 				Labels: map[string]string{"rr": "0"},
 			},
 			Status: corev1.NodeStatus{
@@ -983,6 +1022,7 @@ func TestReconcileDownscale(t *testing.T) {
 		},
 	}
 
+	removeCalled := 0
 	rrcr := RouteReflectorConfigReconciler{
 		NodeLabelKey: "rr",
 		Client: mockClient{
@@ -990,8 +1030,8 @@ func TestReconcileDownscale(t *testing.T) {
 			listResult: nodes,
 		},
 		Topology: mockTopology{
-			isRouteReflector: func(string) bool {
-				return true
+			isRouteReflector: func(UID string) bool {
+				return UID == "rr"
 			},
 			getRouteReflectorStatuses: func(nodes map[*corev1.Node]bool) []topologies.RouteReflectorStatus {
 				return []topologies.RouteReflectorStatus{
@@ -1007,7 +1047,12 @@ func TestReconcileDownscale(t *testing.T) {
 				return
 			},
 		},
-		Datastore: mockDatastore{},
+		Datastore: mockDatastore{
+			removeRRStatus: func() error {
+				removeCalled++
+				return nil
+			},
+		},
 		BGPPeer: mockBGPPeer{
 			listBGPPeers: func() (*calicoApi.BGPPeerList, error) {
 				return &calicoApi.BGPPeerList{}, nil
@@ -1022,6 +1067,9 @@ func TestReconcileDownscale(t *testing.T) {
 	}
 	if res != finished {
 		t.Error("Wrong exit response not finished")
+	}
+	if removeCalled != 1 {
+		t.Errorf("Remove was called not exactly once %d", removeCalled)
 	}
 }
 
