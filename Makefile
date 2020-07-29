@@ -16,7 +16,7 @@ all: manager
 
 # Run tests
 test: generate fmt vet manifests
-	go test ./... -race -coverprofile coverage.txt
+	go test ./... -count=5 -race -coverprofile coverage.txt
 
 # Build manager binary
 manager: generate fmt vet
