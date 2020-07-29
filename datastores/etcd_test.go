@@ -16,21 +16,15 @@ limitations under the License.
 package datastores
 
 import (
-	"context"
 	"errors"
 	"testing"
 
-	"github.com/mhmxs/calico-route-reflector-operator/topologies"
 	calicoApi "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	calicoClient "github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/options"
-	"github.com/projectcalico/libcalico-go/lib/watch"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func TestRemoveRRStatusListError(t *testing.T) {
+func TestEtcdRemoveRRStatusListError(t *testing.T) {
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{"rr": "0"},
@@ -59,7 +53,7 @@ func TestRemoveRRStatusListError(t *testing.T) {
 	}
 }
 
-func TestRemoveRRStatusNodeNotFound(t *testing.T) {
+func TestEtcdRemoveRRStatusNodeNotFound(t *testing.T) {
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{"rr": "0"},
@@ -90,7 +84,7 @@ func TestRemoveRRStatusNodeNotFound(t *testing.T) {
 	}
 }
 
-func TestRemoveRRStatusUpdateError(t *testing.T) {
+func TestEtcdRemoveRRStatusUpdateError(t *testing.T) {
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
@@ -139,7 +133,7 @@ func TestRemoveRRStatusUpdateError(t *testing.T) {
 	}
 }
 
-func TestRemoveRRStatus(t *testing.T) {
+func TestEtcdRemoveRRStatus(t *testing.T) {
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
@@ -199,7 +193,7 @@ func TestRemoveRRStatus(t *testing.T) {
 	}
 }
 
-func TestAddRRStatus(t *testing.T) {
+func TestEtcdAddRRStatus(t *testing.T) {
 	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
@@ -255,76 +249,4 @@ func TestAddRRStatus(t *testing.T) {
 	if nodeToUpdate.Spec.BGP.RouteReflectorClusterID != "clusterID" {
 		t.Errorf("Wrong RouteReflectorClusterID was configured %s", nodeToUpdate.Spec.BGP.RouteReflectorClusterID)
 	}
-}
-
-type mockTopology struct {
-	getClusterID func() string
-	getNodeLabel func() (string, string)
-}
-
-func (m mockTopology) IsRouteReflector(UID string, _ map[string]string) bool {
-	return false
-}
-
-func (m mockTopology) GetClusterID(string, int64) string {
-	return m.getClusterID()
-}
-
-func (m mockTopology) GetNodeLabel(string) (string, string) {
-	return m.getNodeLabel()
-}
-
-func (m mockTopology) NewNodeListOptions(labels map[string]string) client.ListOptions {
-	return client.ListOptions{}
-}
-
-func (m mockTopology) GetRouteReflectorStatuses(nodes map[*corev1.Node]bool) []topologies.RouteReflectorStatus {
-	return nil
-}
-
-func (m mockTopology) GenerateBGPPeers([]corev1.Node, map[*corev1.Node]bool, *calicoApi.BGPPeerList) ([]calicoApi.BGPPeer, []calicoApi.BGPPeer) {
-	return nil, nil
-}
-
-type mockCalicoClient struct {
-	mockNodeInterface calicoClient.NodeInterface
-}
-
-func (m mockCalicoClient) Nodes() calicoClient.NodeInterface {
-	return m.mockNodeInterface
-}
-
-type mockNodeInterface struct {
-	update func(*calicoApi.Node) (*calicoApi.Node, error)
-	list   func() (*calicoApi.NodeList, error)
-}
-
-func (m mockNodeInterface) Create(context.Context, *calicoApi.Node, options.SetOptions) (*calicoApi.Node, error) {
-	return nil, nil
-}
-
-func (m mockNodeInterface) Update(_ context.Context, node *calicoApi.Node, _ options.SetOptions) (*calicoApi.Node, error) {
-	if m.update != nil {
-		return m.update(node)
-	}
-	return nil, nil
-}
-
-func (m mockNodeInterface) Delete(context.Context, string, options.DeleteOptions) (*calicoApi.Node, error) {
-	return nil, nil
-}
-
-func (m mockNodeInterface) Get(context.Context, string, options.GetOptions) (*calicoApi.Node, error) {
-	return nil, nil
-}
-
-func (m mockNodeInterface) List(context.Context, options.ListOptions) (*calicoApi.NodeList, error) {
-	if m.list != nil {
-		return m.list()
-	}
-	return nil, nil
-}
-
-func (m mockNodeInterface) Watch(context.Context, options.ListOptions) (watch.Interface, error) {
-	return nil, nil
 }
