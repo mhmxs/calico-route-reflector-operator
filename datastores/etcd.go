@@ -27,9 +27,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+type nodeClient interface {
+	Nodes() calicoClient.NodeInterface
+}
+
 type EtcdDataStore struct {
 	topology     topologies.Topology
-	calicoClient calicoClient.Interface
+	calicoClient nodeClient
 }
 
 func (d *EtcdDataStore) RemoveRRStatus(node *corev1.Node) error {
@@ -71,7 +75,7 @@ func (d *EtcdDataStore) updateRouteReflectorClusterID(node *corev1.Node, cluster
 	calicoNode.Spec.BGP.RouteReflectorClusterID = clusterID
 
 	log.Infof("Adding route reflector cluster ID in %s to '%s' for %s", calicoNode.GetName(), clusterID, node.GetName())
-	calicoNode, err = d.calicoClient.Nodes().Update(context.Background(), calicoNode, options.SetOptions{})
+	_, err = d.calicoClient.Nodes().Update(context.Background(), calicoNode, options.SetOptions{})
 	if err != nil {
 		log.Errorf("Unable to update Calico node %s because of %s", node.GetName(), err.Error())
 		return err
