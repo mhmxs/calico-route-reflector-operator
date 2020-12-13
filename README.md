@@ -15,6 +15,9 @@
 
 ### Proposal documentation found here: https://github.com/mhmxs/calico-route-reflector-operator-proposal. Please feel free to share your ideas !!!
 
+# This POC moving to Calico as an official feature. Please follow the PR: https://github.com/projectcalico/kube-controllers/pull/514
+
+---
 ## Prerequisites
 
  * Kubernetes cluster up and running
